@@ -21,10 +21,8 @@ export default function Topbar({ setIsMobileOpen }) {
   const searchRef = useRef(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Theme State
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  });
+  // Theme: only explicit user choice (default light — same for every visitor)
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
 
   useEffect(() => {
     if (isDarkMode) {

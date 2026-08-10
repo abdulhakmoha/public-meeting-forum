@@ -1,15 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
   /* Primary brand - Emerald Green */
-  --color-primary: #10B981;
-  --color-primary-hover: #059669;
-  --color-primary-glow: rgba(16, 185, 129, 0.2);
+  --color-primary: #0D9488;
+  --color-primary-hover: #0F766E;
+  --color-primary-glow: rgba(13, 148, 136, 0.2);
 
-  /* Accent - Indigo */
-  --color-accent: #6366F1;
-  --color-accent-hover: #4F46E5;
+  /* Accent - deep teal (not purple) */
+  --color-accent: #0F766E;
+  --color-accent-hover: #115E59;
 
   /* Semantic */
   --color-success: #10B981;
@@ -36,7 +35,12 @@
   --color-background: #F1F5F9;
   --color-surface: #FFFFFF;
 
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+}
+
+@utility font-display {
+  font-family: var(--font-display);
 }
 
 /* Dark Mode Overrides */
@@ -69,10 +73,10 @@
   html { scroll-behavior: smooth; }
 
   body {
-    font-family: "Inter", system-ui, sans-serif;
+    font-family: "Outfit", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     background: var(--color-background);
-    color: #0F172A;
+    color: var(--color-text);
     min-height: 100vh;
   }
 
