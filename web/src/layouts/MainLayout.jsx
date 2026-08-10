@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Users, LogIn, Menu, X } from 'lucide-react';
+import { LogIn, Menu, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -8,7 +8,6 @@ export default function MainLayout() {
   const location = useLocation();
   const isHome = location.pathname === '/';
 
-  // Public site always light — same look for every visitor / device
   useEffect(() => {
     document.documentElement.classList.remove('dark');
   }, [location.pathname]);
@@ -16,6 +15,10 @@ export default function MainLayout() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
+
+  const linkClass = isHome
+    ? 'text-white/80 hover:text-white font-medium transition-colors'
+    : 'text-slate-600 hover:text-slate-900 font-medium transition-colors';
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-[#F4F7F5] text-slate-900">
@@ -27,32 +30,22 @@ export default function MainLayout() {
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="bg-teal-600 p-2 rounded-lg text-white group-hover:scale-105 transition-transform">
-              <Users size={22} />
-            </div>
-            <span className={`font-display text-xl tracking-tight ${isHome ? 'text-white' : 'text-slate-900'}`}>
-              PMCFMS
-            </span>
+          <Link
+            to="/"
+            className={`text-lg font-semibold tracking-tight transition-colors ${
+              isHome ? 'text-white hover:text-teal-200' : 'text-slate-900 hover:text-teal-700'
+            }`}
+          >
+            Home
           </Link>
 
           <div className="hidden md:flex items-center gap-7">
-            <Link
-              to="/about"
-              className={`font-medium transition-colors ${isHome ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              About
-            </Link>
-            <Link
-              to="/forums"
-              className={`font-medium transition-colors ${isHome ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Forums
-            </Link>
+            <Link to="/about" className={linkClass}>About</Link>
+            <Link to="/forums" className={linkClass}>Forums</Link>
             <div className={`h-5 w-px ${isHome ? 'bg-white/20' : 'bg-slate-200'}`} />
             <Link
               to="/login"
-              className={`flex items-center gap-2 font-medium transition-colors ${isHome ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-teal-700'}`}
+              className={`flex items-center gap-2 ${linkClass} ${!isHome ? 'hover:text-teal-700' : ''}`}
             >
               <LogIn size={18} />
               Sign In
@@ -85,6 +78,7 @@ export default function MainLayout() {
             className="md:hidden bg-white border-b border-slate-200 overflow-hidden"
           >
             <div className="px-4 py-4 flex flex-col gap-3">
+              <Link to="/" className="text-slate-900 font-semibold py-2">Home</Link>
               <Link to="/about" className="text-slate-700 font-medium py-2">About</Link>
               <Link to="/forums" className="text-slate-700 font-medium py-2">Forums</Link>
               <hr className="border-slate-200" />
