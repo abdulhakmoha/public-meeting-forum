@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LogIn, Menu, X } from 'lucide-react';
+import { Users, LogIn, Menu, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -30,16 +30,17 @@ export default function MainLayout() {
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link
-            to="/"
-            className={`text-lg font-semibold tracking-tight transition-colors ${
-              isHome ? 'text-white hover:text-teal-200' : 'text-slate-900 hover:text-teal-700'
-            }`}
-          >
-            Home
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="bg-teal-600 p-2 rounded-lg text-white group-hover:scale-105 transition-transform">
+              <Users size={22} />
+            </div>
+            <span className={`font-display text-xl tracking-tight ${isHome ? 'text-white' : 'text-slate-900'}`}>
+              PMCFMS
+            </span>
           </Link>
 
           <div className="hidden md:flex items-center gap-7">
+            <Link to="/" className={linkClass}>Home</Link>
             <Link to="/about" className={linkClass}>About</Link>
             <Link to="/forums" className={linkClass}>Forums</Link>
             <div className={`h-5 w-px ${isHome ? 'bg-white/20' : 'bg-slate-200'}`} />
