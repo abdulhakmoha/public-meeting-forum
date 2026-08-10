@@ -42,7 +42,15 @@ export default function Topbar({ setIsMobileOpen }) {
       if (searchRef.current && !searchRef.current.contains(e.target)) setIsSearchOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    const poll = setInterval(() => {
+      if (user) fetchNotifications();
+    }, 8000);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      clearInterval(poll);
+    };
   }, [user]);
 
   useEffect(() => {
@@ -73,7 +81,7 @@ export default function Topbar({ setIsMobileOpen }) {
   const fetchNotifications = async () => {
     try {
       const res = await api.get('/notifications');
-      setNotifications(res.data.data);
+      setNotifications(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }

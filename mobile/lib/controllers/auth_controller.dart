@@ -39,15 +39,7 @@ class AuthController extends GetxController {
         return;
       }
 
-      // Trust cached session first so UI can open; then validate with server.
-      try {
-        user.value = jsonDecode(userDataString) as Map<String, dynamic>;
-      } catch (_) {
-        await logout();
-        return;
-      }
-      isAuthenticated.value = true;
-
+      // Must validate with the live API — do not open dashboard on a stale offline cache
       try {
         final response = await ApiService.get(ApiConstants.me);
         if (response.statusCode == 200 || response.statusCode == 201) {
@@ -58,14 +50,12 @@ class AuthController extends GetxController {
           user.value = me;
           await prefs.setString('user', jsonEncode(me));
           isAuthenticated.value = true;
-        } else if (response.statusCode == 401) {
-          // ApiService already triggers logout on 401
-          isAuthenticated.value = false;
-          user.value = {};
+        } else {
+          await logout();
         }
-        // Other errors (network): keep cached session
       } catch (_) {
-        // Offline / server down — keep local session
+        // Cannot reach API → show login (avoids empty dashboard on wrong/old session)
+        await logout();
       }
     } catch (_) {
       isAuthenticated.value = false;

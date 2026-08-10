@@ -14,20 +14,21 @@ exports.notifyUsersAboutMeeting = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Meeting not found' });
     }
 
-    const users = await User.find({ role: 'citizen' }).select('name email phone');
+    // All registered users get Email + SMS + in-app bell notification
+    const recipients = await User.find({}).select('name email phone role');
     const meetingDate = new Date(meeting.date).toLocaleString();
     const meetingDay = new Date(meeting.date).toLocaleDateString();
 
     // Respond immediately so the browser does not hit Network Error / timeout
     res.status(202).json({
       success: true,
-      message: `Sending Email + SMS to ${users.length} citizens now. This continues in the background.`,
-      data: { recipients: users.length },
+      message: `Sending Email + SMS to ${recipients.length} users now. This continues in the background.`,
+      data: { recipients: recipients.length },
     });
 
     setImmediate(async () => {
       try {
-        const result = await deliverToUsers(users, {
+        const result = await deliverToUsers(recipients, {
           emailSubject: `Public Meeting - ${meeting.title}`,
           emailText: (user) =>
             `Dear ${user.name},\n\nYou are invited to a public meeting: ${meeting.title}.\nDate: ${meetingDate}\nLocation: ${meeting.location || 'TBA'}\n\nPlease join us.\n\nBest regards,\nPMCFMS Team`,
@@ -71,7 +72,8 @@ exports.notifyUsersAboutMeeting = async (req, res) => {
 // @access  Private
 exports.getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user.id })
+    const userId = req.user._id || req.user.id;
+    const notifications = await Notification.find({ recipient: userId })
       .sort('-createdAt')
       .limit(50);
     res.status(200).json({ success: true, data: notifications });
@@ -85,7 +87,8 @@ exports.getNotifications = async (req, res) => {
 // @access  Private
 exports.readAllNotifications = async (req, res) => {
   try {
-    await Notification.updateMany({ recipient: req.user.id }, { isRead: true });
+    const userId = req.user._id || req.user.id;
+    await Notification.updateMany({ recipient: userId }, { isRead: true });
     res.status(200).json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
