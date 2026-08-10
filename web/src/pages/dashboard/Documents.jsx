@@ -1,8 +1,10 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, Calendar, FileText, Download, X, File, UploadCloud } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Calendar, FileText, Download, X, File, UploadCloud, Eye, ExternalLink } from 'lucide-react';
 import api from '../../services/api';
+import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Documents() {
   const { user } = useContext(AuthContext);
@@ -14,17 +16,52 @@ export default function Documents() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [viewer, setViewer] = useState({ open: false, url: '', title: '' });
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
 
   useEffect(() => { fetchDocuments(); }, []);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = async (quiet = false) => {
     try {
+      if (!quiet) setLoading(true);
       const res = await api.get('/documents');
       setDocuments(res.data.data || []);
     } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    finally { if (!quiet) setLoading(false); }
+  };
+
+  useLivePoll(() => fetchDocuments(true), 8000);
+
+  const docUrl = (fileUrl) => {
+    if (!fileUrl) return '';
+    return fileUrl.startsWith('http') ? fileUrl : mediaUrl(fileUrl);
+  };
+
+  const openDocument = (doc) => {
+    const url = docUrl(doc.fileUrl);
+    if (!url) return;
+    setViewer({ open: true, url, title: doc.title || 'Document' });
+  };
+
+  const downloadDocument = async (doc) => {
+    const url = docUrl(doc.fileUrl);
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      const ext = (doc.fileUrl || '').split('.').pop()?.split('?')[0] || 'pdf';
+      a.download = `${(doc.title || 'document').replace(/[^\w.\- ]+/g, '_')}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleFileChange = (e) => {
@@ -130,7 +167,7 @@ export default function Documents() {
             <FolderOpen className="text-teal-500" size={24} /> Document Library
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Download district budgets, meeting minutes, and municipal policies.
+            Browse and open district budgets, meeting minutes, and municipal policies.
           </p>
         </div>
         {canManage && (
@@ -183,15 +220,27 @@ export default function Documents() {
                       <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed line-clamp-2">{doc.description}</p>
                     )}
                   </div>
-                  <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
-                    <div className="text-[10px] text-slate-400 space-y-0.5">
+                  <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2">
+                    <div className="text-[10px] text-slate-400 space-y-0.5 min-w-0">
                       <p className="flex items-center gap-1"><Calendar size={10} /> {new Date(doc.createdAt).toLocaleDateString()}</p>
                       <p>Size: <span className="font-medium text-slate-500">{doc.fileSize}</span></p>
                     </div>
-                    <a href={doc.fileUrl.startsWith('http') ? doc.fileUrl : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${doc.fileUrl}`} target="_blank" rel="noreferrer"
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r ${style.grad} text-white rounded-xl font-semibold transition-all text-xs shadow-sm hover:opacity-90 hover:scale-[1.03] active:scale-[0.97]`}>
-                      <Download size={12} /> Download
-                    </a>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openDocument(doc)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-slate-950 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 rounded-xl font-semibold transition-all text-xs hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:scale-[1.03] active:scale-[0.97]"
+                      >
+                        <Eye size={12} /> Open
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadDocument(doc)}
+                        className={`flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r ${style.grad} text-white rounded-xl font-semibold transition-all text-xs shadow-sm hover:opacity-90 hover:scale-[1.03] active:scale-[0.97]`}
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -199,6 +248,53 @@ export default function Documents() {
           })}
         </div>
       )}
+
+      {/* Document Viewer Modal */}
+      <AnimatePresence>
+        {viewer.open && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col"
+              style={{ height: '85vh' }}
+            >
+              <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-cyan-500" />
+              <div className="flex justify-between items-center px-6 py-3 border-b border-slate-100 dark:border-slate-800 gap-3">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-sm min-w-0">
+                  <FileText size={16} className="text-teal-500 shrink-0" />
+                  <span className="truncate">{viewer.title}</span>
+                </h3>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={viewer.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                  >
+                    <ExternalLink size={12} /> New tab
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setViewer({ open: false, url: '', title: '' })}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 bg-slate-100 dark:bg-slate-950">
+                <iframe
+                  src={viewer.url}
+                  className="w-full h-full border-0"
+                  title={viewer.title || 'Document viewer'}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Create Modal */}
       <AnimatePresence>

@@ -22,7 +22,19 @@ exports.getAnnouncements = async (req, res) => {
 exports.createAnnouncement = async (req, res) => {
   try {
     const { title, content, category, date } = req.body;
-    
+
+    if (date) {
+      const chosen = new Date(date);
+      if (Number.isNaN(chosen.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid date' });
+      }
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (chosen < startOfToday) {
+        return res.status(400).json({ success: false, message: 'Past dates are not allowed' });
+      }
+    }
+
     const announcement = await Announcement.create({
       title,
       content,

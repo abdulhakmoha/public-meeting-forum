@@ -1,15 +1,33 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
+import '../utils/app_notification.dart';
+import '../utils/live_poll.dart';
 
 class ProjectController extends GetxController {
   var isLoading = false.obs;
   var projects = <dynamic>[].obs;
   var isSubmitting = false.obs;
 
-  Future<void> fetchProjects() async {
+  late final VoidCallback _liveRefresh;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _liveRefresh = () => fetchProjects(quiet: true);
+    LivePoll.register(_liveRefresh);
+  }
+
+  @override
+  void onClose() {
+    LivePoll.unregister(_liveRefresh);
+    super.onClose();
+  }
+
+  Future<void> fetchProjects({bool quiet = false}) async {
     try {
-      isLoading.value = true;
+      if (!quiet) isLoading.value = true;
       final response = await ApiService.get('/projects');
       final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
@@ -18,7 +36,7 @@ class ProjectController extends GetxController {
     } catch (e) {
       print('Error fetching projects: $e');
     } finally {
-      isLoading.value = false;
+      if (!quiet) isLoading.value = false;
     }
   }
 
@@ -41,11 +59,14 @@ class ProjectController extends GetxController {
       final response = await ApiService.post('/projects', data);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await fetchProjects();
+        AppNotification.success('Created', 'Project created successfully');
         return true;
       }
+      AppNotification.error('Failed to create project');
       return false;
     } catch (e) {
       print('Error creating project: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     } finally {
       isSubmitting.value = false;
@@ -57,11 +78,14 @@ class ProjectController extends GetxController {
       final response = await ApiService.delete('/projects/$id');
       if (response.statusCode == 200) {
         projects.removeWhere((p) => p['_id'] == id);
+        AppNotification.success('Deleted', 'Project deleted');
         return true;
       }
+      AppNotification.error('Failed to delete project');
       return false;
     } catch (e) {
       print('Error deleting project: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -73,11 +97,14 @@ class ProjectController extends GetxController {
         final updated = jsonDecode(response.body)['data'];
         final idx = projects.indexWhere((p) => p['_id'] == id);
         if (idx != -1) projects[idx] = updated;
+        AppNotification.success('Updated', 'Project updated successfully');
         return true;
       }
+      AppNotification.error('Failed to update project');
       return false;
     } catch (e) {
       print('Error updating project: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }

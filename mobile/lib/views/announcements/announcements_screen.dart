@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/app_notification.dart';
 import '../../utils/theme.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
@@ -56,7 +57,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           if (_canManage)
             IconButton(
               icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryColor),
-              onPressed: () => _showCreateSheet(),
+              onPressed: () => _showCreateDialog(),
             ),
         ],
       ),
@@ -90,12 +91,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                       Container(
                         width: 72, height: 72,
                         decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                        child: const Icon(Icons.campaign_outlined, size: 36, color: AppTheme.textSubtle),
+                        child: Icon(Icons.campaign_outlined, size: 36, color: AppTheme.textSubtle),
                       ),
-                      const SizedBox(height: 16),
-                      const Text('No announcements yet', style: TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontCardTitle)),
-                      const SizedBox(height: 4),
-                      const Text('New announcements will appear here when posted.', style: TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall)),
+                      SizedBox(height: 16),
+                      Text('No announcements yet', style: TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontCardTitle)),
+                      SizedBox(height: 4),
+                      Text('New announcements will appear here when posted.', style: TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall)),
                     ],
                   ),
                 );
@@ -120,7 +121,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _category = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: active ? AppTheme.primaryColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(18),
@@ -135,7 +136,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final cat = a['category'] ?? 'General';
     final color = _catColor(cat);
     return Container(
-          margin: const EdgeInsets.only(bottom: 14),
+          margin: EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor,
             borderRadius: BorderRadius.circular(18),
@@ -162,12 +163,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         if (a['createdAt'] != null || a['date'] != null)
                           Text(
                             DateFormat('MMM d, yyyy').format(DateTime.parse(a['date'] ?? a['createdAt'])),
-                            style: const TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall),
+                            style: TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall),
                           ),
-                        const Spacer(),
+                        Spacer(),
                         if (_canManage)
                           PopupMenuButton(
-                            icon: const Icon(Icons.more_vert, color: AppTheme.textSubtle, size: 18),
+                            icon: Icon(Icons.more_vert, color: AppTheme.textSubtle, size: 18),
                             itemBuilder: (_) => [
                               PopupMenuItem(
                                 value: 'delete',
@@ -184,26 +185,26 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(a['title'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: AppTheme.fontCardTitle, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    Text(a['content'] ?? a['body'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontBody, height: 1.5)),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 10),
+                    Text(a['title'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: AppTheme.fontCardTitle, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 6),
+                    Text(a['content'] ?? a['body'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontBody, height: 1.5)),
+                    SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.only(top: 10),
-                      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderColor, width: 0.5))),
+                      padding: EdgeInsets.only(top: 10),
+                      decoration: BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderColor, width: 0.5))),
                       child: Row(
                         children: [
                           Icon(Icons.shield_outlined, size: 12, color: AppTheme.primaryColor),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Text('Posted by: ', style: TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall)),
                           Text(
                             a['creator']?['name'] ?? 'Unknown',
                             style: TextStyle(color: AppTheme.textPrimary, fontSize: AppTheme.fontSmall, fontWeight: FontWeight.w600),
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(color: AppTheme.backgroundColor, borderRadius: BorderRadius.circular(6)),
                             child: Text(
                               (a['creator']?['role'] ?? '').toString().capitalizeFirst!,
@@ -221,115 +222,202 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   );
   }
 
-  void _showCreateSheet() {
+  void _showCreateDialog() {
     final titleCtrl = TextEditingController();
     final contentCtrl = TextEditingController();
     String category = 'General';
+    DateTime selectedDate = DateTime.now();
+    var publishing = false;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40, height: 4,
-              decoration: BoxDecoration(color: AppTheme.borderColor, borderRadius: BorderRadius.circular(2)),
-            ),
-            Container(height: 4, width: double.infinity, color: AppTheme.primaryColor),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.campaign_outlined, size: 20, color: AppTheme.primaryColor),
-                  const SizedBox(width: 8),
-                  const Text('New Announcement', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: AppTheme.textMuted),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Title',
-                      hintText: 'Enter announcement title...',
-                      filled: true, fillColor: AppTheme.backgroundColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: category,
-                    decoration: InputDecoration(
-                      labelText: 'Category',
-                      filled: true, fillColor: AppTheme.backgroundColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'General', child: Text('General')),
-                      DropdownMenuItem(value: 'Meeting', child: Text('Meeting')),
-                      DropdownMenuItem(value: 'Urgent', child: Text('Urgent')),
-                    ],
-                    onChanged: (v) => setState(() => category = v ?? 'General'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: contentCtrl,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      labelText: 'Content',
-                      hintText: 'Write the full announcement content...',
-                      filled: true, fillColor: AppTheme.backgroundColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        if (titleCtrl.text.isEmpty || contentCtrl.text.isEmpty) {
-                          Get.snackbar('Error', 'Title and content are required');
-                          return;
-                        }
-                        final success = await controller.createAnnouncement({
-                          'title': titleCtrl.text.trim(),
-                          'content': contentCtrl.text.trim(),
-                          'category': category,
-                        });
-                        if (success) Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+            final maxH = MediaQuery.of(context).size.height * 0.88;
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: Colors.white,
+              insetPadding: EdgeInsets.fromLTRB(16, 24, 16, viewInsets > 0 ? 8 : 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxH - viewInsets * 0.3),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 8, 8),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'New Announcement',
+                              style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: publishing ? null : () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                          ),
+                        ],
                       ),
-                      child: const Text('Publish Announcement', style: TextStyle(fontSize: AppTheme.fontBody, fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                ],
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + (viewInsets > 0 ? 8 : 0)),
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: titleCtrl,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                hintText: 'Title',
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: contentCtrl,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                hintText: 'Announcement content...',
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: category,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              ),
+                              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                              items: const [
+                                DropdownMenuItem(value: 'General', child: Text('General')),
+                                DropdownMenuItem(value: 'Meeting', child: Text('Meeting')),
+                                DropdownMenuItem(value: 'Urgent', child: Text('Urgent')),
+                                DropdownMenuItem(value: 'Infrastructure', child: Text('Infrastructure')),
+                                DropdownMenuItem(value: 'Healthcare', child: Text('Healthcare')),
+                                DropdownMenuItem(value: 'Education', child: Text('Education')),
+                                DropdownMenuItem(value: 'Security', child: Text('Security')),
+                              ],
+                              onChanged: (v) => setStateDialog(() => category = v ?? 'General'),
+                            ),
+                            const SizedBox(height: 16),
+                            GestureDetector(
+                              onTap: () async {
+                                final now = DateTime.now();
+                                final today = DateTime(now.year, now.month, now.day);
+                                final initial = selectedDate.isBefore(today) ? today : selectedDate;
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: initial,
+                                  firstDate: today,
+                                  lastDate: DateTime(2101),
+                                );
+                                if (picked != null) {
+                                  setStateDialog(() => selectedDate = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today_outlined, color: Color(0xFF94A3B8), size: 20),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      DateFormat('yyyy-MM-dd').format(selectedDate),
+                                      style: const TextStyle(color: Color(0xFF334155), fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: publishing
+                                    ? null
+                                    : () async {
+                                        if (titleCtrl.text.trim().isEmpty || contentCtrl.text.trim().isEmpty) {
+                                          Get.snackbar('Error', 'Title and content are required');
+                                          return;
+                                        }
+                                        setStateDialog(() => publishing = true);
+                                        final success = await controller.createAnnouncement({
+                                          'title': titleCtrl.text.trim(),
+                                          'content': contentCtrl.text.trim(),
+                                          'category': category,
+                                          'date': selectedDate.toIso8601String(),
+                                        });
+                                        setStateDialog(() => publishing = false);
+                                        if (success) {
+                                          if (dialogContext.mounted) Navigator.pop(dialogContext);
+                                          Future.microtask(() {
+                                            AppNotification.success(
+                                              'Announcement Created',
+                                              'Announcement posted successfully',
+                                            );
+                                          });
+                                        }
+                                      },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryColor,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  elevation: 0,
+                                ),
+                                child: Text(
+                                  publishing ? 'Publishing...' : 'Publish',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/api_constants.dart';
 import '../../utils/theme.dart';
 import '../auth/login_screen.dart';
 import 'profile_edit_screen.dart';
@@ -25,9 +26,9 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () {
               Get.defaultDialog(
                 title: 'Sign Out',
-                titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+                titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
                 middleText: 'Are you sure you want to sign out?',
-                middleTextStyle: const TextStyle(color: AppTheme.textSubtle),
+                middleTextStyle: TextStyle(color: AppTheme.textSubtle),
                 backgroundColor: AppTheme.surfaceColor,
                 textConfirm: 'Sign Out',
                 textCancel: 'Cancel',
@@ -61,19 +62,23 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(45),
-                  child: user['profileImage'] != null
-                      ? Image.network(
-                          'http://10.0.2.2:5001${user['profileImage']}',
-                          width: 90, height: 90, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _avatarText(user),
-                        )
-                      : _avatarText(user),
+                  child: () {
+                    final picUrl = ApiConstants.mediaUrl(
+                      (user['profileImage'] ?? user['profilePicture'])?.toString(),
+                    );
+                    if (picUrl.isEmpty) return _avatarText(user);
+                    return Image.network(
+                      picUrl,
+                      width: 90, height: 90, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _avatarText(user),
+                    );
+                  }(),
                 ),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
               Text(
                 user['name'] ?? 'Unknown User',
-                style: const TextStyle(fontSize: AppTheme.fontSectionTitle, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                style: TextStyle(fontSize: AppTheme.fontSectionTitle, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
               ),
               const SizedBox(height: 6),
               Container(
@@ -124,8 +129,8 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(14),
@@ -143,9 +148,9 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall)),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(color: AppTheme.textPrimary, fontSize: AppTheme.fontBody, fontWeight: FontWeight.w500)),
+                Text(label, style: TextStyle(color: AppTheme.textSubtle, fontSize: AppTheme.fontSmall)),
+                SizedBox(height: 2),
+                Text(value, style: TextStyle(color: AppTheme.textPrimary, fontSize: AppTheme.fontBody, fontWeight: FontWeight.w500)),
               ],
             ),
           )

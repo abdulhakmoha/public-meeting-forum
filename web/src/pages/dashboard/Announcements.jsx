@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Megaphone, Plus, Trash2, Calendar, Shield, X } from 'lucide-react';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Announcements() {
   const { user } = useContext(AuthContext);
@@ -13,25 +14,44 @@ export default function Announcements() {
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
 
+  // Local calendar date as YYYY-MM-DD — past days disabled in the picker
+  const todayStr = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+
   useEffect(() => { fetchAnnouncements(); }, []);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = async (quiet = false) => {
     try {
+      if (!quiet) setLoading(true);
       const res = await api.get('/announcements');
       setAnnouncements(res.data.data || []);
     } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    finally { if (!quiet) setLoading(false); }
   };
+
+  useLivePoll(() => fetchAnnouncements(true), 8000);
 
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!newAnnouncement.title || !newAnnouncement.content) return;
+    if (newAnnouncement.date && newAnnouncement.date < todayStr) {
+      alert('Past dates are not allowed. Please choose today or a future date.');
+      return;
+    }
     try {
       const res = await api.post('/announcements', newAnnouncement);
       setAnnouncements([res.data.data, ...announcements]);
       setIsModalOpen(false);
       setNewAnnouncement({ title: '', content: '', category: 'General', date: '' });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to publish announcement');
+      console.error(err);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -176,7 +196,12 @@ export default function Announcements() {
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Date (Optional)</label>
                   <input type="date" value={newAnnouncement.date}
-                    onChange={e => setNewAnnouncement({ ...newAnnouncement, date: e.target.value })}
+                    min={todayStr}
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (v && v < todayStr) return;
+                      setNewAnnouncement({ ...newAnnouncement, date: v });
+                    }}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 focus:outline-none transition-all" />
                 </div>
                 <div>

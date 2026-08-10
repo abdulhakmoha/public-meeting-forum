@@ -4,6 +4,7 @@ import { MessageSquare, Search, Plus, Filter, CheckCircle, XCircle, Clock } from
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Forums() {
   const { user } = useContext(AuthContext);
@@ -27,16 +28,19 @@ export default function Forums() {
     fetchForums();
   }, []);
 
-  const fetchForums = async () => {
+  const fetchForums = async (quiet = false) => {
     try {
+      if (!quiet) setLoading(true);
       const res = await api.get('/forums');
       setForums(res.data.data);
-      setLoading(false);
+      if (!quiet) setLoading(false);
     } catch (error) {
       console.error('Error fetching forums:', error);
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
+
+  useLivePoll(() => fetchForums(true), 8000);
 
   const handleFileChange = (e) => {
     setSelectedFiles(Array.from(e.target.files));

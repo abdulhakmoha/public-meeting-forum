@@ -38,7 +38,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
         }
         final meeting = controller.currentMeeting;
         if (meeting.isEmpty) {
-          return const Center(child: Text('Meeting not found', style: TextStyle(color: AppTheme.textPrimary)));
+          return Center(child: Text('Meeting not found', style: TextStyle(color: AppTheme.textPrimary)));
         }
 
         final date = meeting['date'] != null ? DateTime.tryParse(meeting['date']) : null;
@@ -65,11 +65,11 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
               pinned: true,
               backgroundColor: AppTheme.surfaceColor,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: AppTheme.textPrimary),
+                icon: Icon(Icons.arrow_back_ios, color: AppTheme.textPrimary),
                 onPressed: () => Get.back(),
               ),
               flexibleSpace: FlexibleSpaceBar(
-                title: Text(meeting['title'] ?? 'Meeting', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                title: Text(meeting['title'] ?? 'Meeting', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                 background: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -82,7 +82,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
               actions: [
                 if (_canManage && !isEnded)
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: AppTheme.textPrimary),
+                    icon: Icon(Icons.more_vert, color: AppTheme.textPrimary),
                     onSelected: (v) {
                       if (v == 'edit') _showEditDialog(meeting);
                       if (v == 'notify') notifCtrl.notifyMeetingAttendees(widget.meetingId);
@@ -156,14 +156,14 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
       child: Column(
         children: [
           _infoRow(Icons.calendar_today, 'Date', date != null ? DateFormat('MMM d, yyyy').format(date) : 'TBD'),
-          const Divider(height: 20, color: AppTheme.borderColor),
+          Divider(height: 20, color: AppTheme.borderColor),
           _infoRow(Icons.access_time, 'Time',
               meeting['startTime'] != null && meeting['endTime'] != null
                   ? '${meeting['startTime']} — ${meeting['endTime']}'
                   : (date != null ? '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}' : 'TBD')),
-          const Divider(height: 20, color: AppTheme.borderColor),
+          Divider(height: 20, color: AppTheme.borderColor),
           _infoRow(meeting['meetingType'] == 'zoom' ? Icons.video_call : Icons.location_on, 'Location', meeting['location'] ?? 'TBD'),
-          const Divider(height: 20, color: AppTheme.borderColor),
+          Divider(height: 20, color: AppTheme.borderColor),
           _infoRow(Icons.people_outline, 'Attendees', '${(meeting['attendees'] as List?)?.length ?? 0} people'),
         ],
       ),
@@ -178,9 +178,9 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
-            const SizedBox(height: 2),
-            Text(value, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(label, style: TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
+            SizedBox(height: 2),
+            Text(value, style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
           ],
         ),
       ],
@@ -206,9 +206,9 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
-                Text(email, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                Text(name, style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                SizedBox(height: 2),
+                Text(email, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
                 const SizedBox(height: 2),
                 if (role.isNotEmpty)
                   Container(
@@ -233,10 +233,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Agenda', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+          Text('Agenda', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
           Text(meeting['description'] ?? 'No description provided',
-              style: const TextStyle(color: AppTheme.textSubtle, fontSize: 14, height: 1.6)),
+              style: TextStyle(color: AppTheme.textSubtle, fontSize: 14, height: 1.6)),
         ],
       ),
     );
@@ -248,13 +248,13 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     if (isEnded && !isCancelled) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppTheme.textSubtle.withOpacity(0.1),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppTheme.textSubtle.withOpacity(0.3)),
         ),
-        child: const Text('This meeting has ended',
+        child: Text('This meeting has ended',
             textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSubtle, fontWeight: FontWeight.bold)),
       );
     }
@@ -363,22 +363,22 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.people, size: 18, color: AppTheme.primaryColor),
-              const SizedBox(width: 8),
+              Icon(Icons.people, size: 18, color: AppTheme.primaryColor),
+              SizedBox(width: 8),
               Text('Attendees (${attendees.length})',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           if (attendees.isEmpty)
-            const Text('No attendees yet', style: TextStyle(color: AppTheme.textSubtle))
+            Text('No attendees yet', style: TextStyle(color: AppTheme.textSubtle))
           else
             ...attendees.map((a) {
               final name = a is Map ? (a['name'] ?? 'Unknown') : 'Unknown';
               final district = a is Map ? (a['district'] ?? '') : '';
               return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
+                margin: EdgeInsets.only(bottom: 8),
+                padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundColor,
                   borderRadius: BorderRadius.circular(10),
@@ -395,8 +395,8 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-                        if (district.isNotEmpty) Text(district, style: const TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
+                        Text(name, style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+                        if (district.isNotEmpty) Text(district, style: TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
                       ],
                     ),
                   ],
@@ -419,9 +419,9 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.how_to_vote, size: 18, color: AppTheme.primaryColor),
-                const SizedBox(width: 8),
-                Text('Polls (${polls.length})', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                Icon(Icons.how_to_vote, size: 18, color: AppTheme.primaryColor),
+                SizedBox(width: 8),
+                Text('Polls (${polls.length})', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 if (_canManage)
                   GestureDetector(
@@ -437,17 +437,17 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             if (polls.isEmpty)
-              const Text('No polls for this meeting', style: TextStyle(color: AppTheme.textSubtle))
+              Text('No polls for this meeting', style: TextStyle(color: AppTheme.textSubtle))
             else
               ...polls.map((poll) {
                 final hasVoted = (poll['voters'] as List?)?.contains(authCtrl.user['_id']) ?? false;
                 final totalVotes = (poll['options'] as List).fold<int>(0, (sum, o) => sum + ((o['votes'] as int?) ?? 0));
                 final isOpen = poll['status'] == 'open';
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(14),
+                  margin: EdgeInsets.only(bottom: 16),
+                  padding: EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: AppTheme.backgroundColor,
                     borderRadius: BorderRadius.circular(12),
@@ -465,9 +465,9 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                               color: isOpen ? Colors.green : AppTheme.textSubtle,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                           Expanded(
-                            child: Text(poll['question'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                            child: Text(poll['question'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
                           if (_canManage) ...[
                             GestureDetector(
@@ -494,7 +494,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Expanded(child: Text(option['text'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 13))),
+                                    Expanded(child: Text(option['text'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 13))),
                                     Text('$pct%', style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 13)),
                                   ],
                                 ),
@@ -508,8 +508,8 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                     valueColor: AlwaysStoppedAnimation(AppTheme.primaryColor.withOpacity(0.7)),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text('${option['votes'] ?? 0} votes', style: const TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
+                                SizedBox(height: 2),
+                                Text('${option['votes'] ?? 0} votes', style: TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
                               ],
                             ),
                           );
@@ -524,21 +524,21 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                               borderRadius: BorderRadius.circular(10),
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(12),
+                                padding: EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   border: Border.all(color: AppTheme.borderColor),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: Text(option['text'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                                child: Text(option['text'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                               ),
                             ),
                           );
                         }
                       }),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Row(
                         children: [
-                          Text('$totalVotes total votes', style: const TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
+                          Text('$totalVotes total votes', style: TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
                           if (hasVoted) ...[
                             const SizedBox(width: 8),
                             Icon(Icons.check, size: 12, color: AppTheme.primaryColor),
@@ -562,7 +562,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
     Get.defaultDialog(
       title: 'Create Poll',
-      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+      titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
       backgroundColor: AppTheme.surfaceColor,
       content: StatefulBuilder(
         builder: (context, setState) {
@@ -577,7 +577,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                     controller: questionCtrl,
                     decoration: InputDecoration(
                       labelText: 'Question',
-                      labelStyle: const TextStyle(color: AppTheme.textSubtle),
+                      labelStyle: TextStyle(color: AppTheme.textSubtle),
                       filled: true, fillColor: AppTheme.backgroundColor,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -593,7 +593,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                               controller: e.value,
                               decoration: InputDecoration(
                                 labelText: 'Option ${e.key + 1}',
-                                labelStyle: const TextStyle(color: AppTheme.textSubtle),
+                                labelStyle: TextStyle(color: AppTheme.textSubtle),
                                 filled: true, fillColor: AppTheme.backgroundColor,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                               ),
@@ -663,7 +663,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
     Get.defaultDialog(
       title: 'Edit Meeting',
-      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+      titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
       backgroundColor: AppTheme.surfaceColor,
       content: StatefulBuilder(
         builder: (context, setState) {
@@ -706,10 +706,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                       }
                     },
                     child: Container(
-                      width: double.infinity, padding: const EdgeInsets.all(16),
+                      width: double.infinity, padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(color: AppTheme.backgroundColor,
                           borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.borderColor)),
-                      child: Text('Date: ${DateFormat('MMM d, yyyy').format(selectedDate)}', style: const TextStyle(color: AppTheme.textMuted)),
+                      child: Text('Date: ${DateFormat('MMM d, yyyy').format(selectedDate)}', style: TextStyle(color: AppTheme.textMuted)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -722,10 +722,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                             if (t != null) setState(() => selectedStart = t);
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(16),
                             decoration: BoxDecoration(color: AppTheme.backgroundColor,
                                 borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.borderColor)),
-                            child: Text('Start: ${selectedStart.format(context)}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                            child: Text('Start: ${selectedStart.format(context)}', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                           ),
                         ),
                       ),
@@ -737,10 +737,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                             if (t != null) setState(() => selectedEnd = t);
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(16),
                             decoration: BoxDecoration(color: AppTheme.backgroundColor,
                                 borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.borderColor)),
-                            child: Text('End: ${selectedEnd.format(context)}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                            child: Text('End: ${selectedEnd.format(context)}', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                           ),
                         ),
                       ),
@@ -787,7 +787,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
   InputDecoration _inputDeco(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textSubtle),
+      hintStyle: TextStyle(color: AppTheme.textSubtle),
       filled: true, fillColor: AppTheme.backgroundColor,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     );

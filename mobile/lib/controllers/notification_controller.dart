@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../utils/api_constants.dart';
+import '../utils/app_notification.dart';
+import '../utils/live_poll.dart';
+import 'settings_controller.dart';
 
 class NotificationController extends GetxController {
   var notifications = [].obs;
@@ -10,15 +14,31 @@ class NotificationController extends GetxController {
 
   int get unreadCount => notifications.where((n) => n['read'] == false).length;
 
+  late final VoidCallback _liveRefresh;
+
   @override
   void onInit() {
     super.onInit();
     fetchNotifications();
+    _liveRefresh = () => fetchNotifications(quiet: true);
+    LivePoll.register(_liveRefresh);
   }
 
-  Future<void> fetchNotifications() async {
+  @override
+  void onClose() {
+    LivePoll.unregister(_liveRefresh);
+    super.onClose();
+  }
+
+  Future<void> fetchNotifications({bool quiet = false}) async {
     try {
-      isLoading.value = true;
+      if (Get.isRegistered<SettingsController>() &&
+          !Get.find<SettingsController>().notificationsEnabled.value) {
+        notifications.clear();
+        hasUnread.value = false;
+        return;
+      }
+      if (!quiet) isLoading.value = true;
       final response = await ApiService.get(ApiConstants.notifications);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -28,7 +48,7 @@ class NotificationController extends GetxController {
     } catch (e) {
       // silently fail
     } finally {
-      isLoading.value = false;
+      if (!quiet) isLoading.value = false;
     }
   }
 
@@ -49,12 +69,12 @@ class NotificationController extends GetxController {
     try {
       final response = await ApiService.post('${ApiConstants.notifications}/meeting/$meetingId', {});
       if (response.statusCode == 200) {
-        Get.snackbar('Success', 'Notifications sent to all attendees');
+        AppNotification.success('Sent', 'Notifications sent to all attendees');
         return true;
       }
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not send notifications');
+      AppNotification.error('Could not send notifications');
       return false;
     }
   }

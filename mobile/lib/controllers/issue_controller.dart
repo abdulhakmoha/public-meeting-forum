@@ -1,15 +1,33 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
+import '../utils/app_notification.dart';
+import '../utils/live_poll.dart';
 
 class IssueController extends GetxController {
   var isLoading = false.obs;
   var issues = <dynamic>[].obs;
   var isSubmitting = false.obs;
 
-  Future<void> fetchIssues() async {
+  late final VoidCallback _liveRefresh;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _liveRefresh = () => fetchIssues(quiet: true);
+    LivePoll.register(_liveRefresh);
+  }
+
+  @override
+  void onClose() {
+    LivePoll.unregister(_liveRefresh);
+    super.onClose();
+  }
+
+  Future<void> fetchIssues({bool quiet = false}) async {
     try {
-      isLoading.value = true;
+      if (!quiet) isLoading.value = true;
       final response = await ApiService.get('/issues');
       final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
@@ -18,7 +36,7 @@ class IssueController extends GetxController {
     } catch (e) {
       print('Error fetching issues: $e');
     } finally {
-      isLoading.value = false;
+      if (!quiet) isLoading.value = false;
     }
   }
 
@@ -30,9 +48,11 @@ class IssueController extends GetxController {
         await fetchIssues();
         return true;
       }
+      AppNotification.error('Failed to submit issue');
       return false;
     } catch (e) {
       print('Error creating issue: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     } finally {
       isSubmitting.value = false;
@@ -52,8 +72,10 @@ class IssueController extends GetxController {
         if (idx != -1) issues[idx] = updated;
         return true;
       }
+      AppNotification.error('Failed to update issue');
       return false;
     } catch (e) {
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -78,11 +100,14 @@ class IssueController extends GetxController {
       final response = await ApiService.delete('/issues/$id');
       if (response.statusCode == 200) {
         issues.removeWhere((i) => i['_id'] == id);
+        AppNotification.success('Deleted', 'Issue deleted');
         return true;
       }
+      AppNotification.error('Failed to delete issue');
       return false;
     } catch (e) {
       print('Error deleting issue: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }

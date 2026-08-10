@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './Calendar.css';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Meetings() {
   const { user } = useContext(AuthContext);
@@ -36,16 +37,19 @@ export default function Meetings() {
     fetchMeetings();
   }, []);
 
-  const fetchMeetings = async () => {
+  const fetchMeetings = async (quiet = false) => {
     try {
+      if (!quiet) setLoading(true);
       const res = await api.get('/meetings');
       setMeetings(res.data.data);
-      setLoading(false);
+      if (!quiet) setLoading(false);
     } catch (error) {
       console.error('Error fetching meetings:', error);
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
+
+  useLivePoll(() => fetchMeetings(true), 8000);
 
   const handleCreateMeeting = async (e) => {
     if (e && e.preventDefault) e.preventDefault();

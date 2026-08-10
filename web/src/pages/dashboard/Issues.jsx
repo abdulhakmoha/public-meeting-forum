@@ -2,7 +2,9 @@ import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, AlertTriangle, Plus, Trash2, Calendar, MapPin, CheckCircle, Clock, X, Flag, ShieldCheck, MessageSquare, Send, Upload, Image } from 'lucide-react';
 import api from '../../services/api';
+import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Issues() {
   const { user } = useContext(AuthContext);
@@ -24,13 +26,21 @@ export default function Issues() {
 
   useEffect(() => { fetchIssues(); }, []);
 
-  const fetchIssues = async () => {
+  const fetchIssues = async (quiet = false) => {
     try {
+      if (!quiet) setLoading(true);
       const res = await api.get('/issues');
-      setIssues(res.data.data || []);
+      const list = res.data.data || [];
+      setIssues(list);
+      setSelectedIssue(prev => {
+        if (!prev) return prev;
+        return list.find(i => i._id === prev._id) || prev;
+      });
     } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    finally { if (!quiet) setLoading(false); }
   };
+
+  useLivePoll(() => fetchIssues(true), 8000);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -306,7 +316,7 @@ export default function Issues() {
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Attach Photo (Optional)</label>
                   {newIssue.imageUrl ? (
                     <div className="relative">
-                      <img src={`${import.meta.env.VITE_API_URL}${newIssue.imageUrl}`} alt="preview" className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700" />
+                      <img src={mediaUrl(newIssue.imageUrl)} alt="preview" className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700" />
                       <button type="button" onClick={() => setNewIssue(p => ({...p, imageUrl: ''}))}
                         className="absolute top-2 right-2 p-1 bg-rose-500 text-white rounded-full shadow"><X size={12} /></button>
                     </div>
@@ -428,9 +438,9 @@ export default function Issues() {
                   <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedIssue.description}</p>
                   {selectedIssue.imageUrl && (
                     <div className="mt-4">
-                      <a href={`${import.meta.env.VITE_API_URL}${selectedIssue.imageUrl}`} target="_blank" rel="noreferrer">
+                      <a href={mediaUrl(selectedIssue.imageUrl)} target="_blank" rel="noreferrer">
                         <img
-                          src={`${import.meta.env.VITE_API_URL}${selectedIssue.imageUrl}`}
+                          src={mediaUrl(selectedIssue.imageUrl)}
                           alt="Issue photo"
                           className="w-full max-h-60 object-cover rounded-2xl border border-slate-200 dark:border-slate-700 hover:opacity-90 transition-opacity"
                         />

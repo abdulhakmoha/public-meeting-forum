@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,16 +11,23 @@ import '../../controllers/project_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/api_service.dart';
 import '../../utils/api_constants.dart';
+import '../../utils/file_kind.dart';
+import '../../utils/project_draft_store.dart';
+import '../../utils/forum_draft_store.dart';
 import '../../utils/theme.dart';
 
 class ProjectsScreen extends StatefulWidget {
-  const ProjectsScreen({Key? key}) : super(key: key);
+  final bool openCreateOnStart;
+
+  const ProjectsScreen({Key? key, this.openCreateOnStart = false}) : super(key: key);
 
   @override
   State<ProjectsScreen> createState() => _ProjectsScreenState();
 }
 
 class _ProjectsScreenState extends State<ProjectsScreen> {
+  static const _pickerChannel = MethodChannel('com.pmcfms.mobile/file_picker');
+
   final ProjectController controller = Get.put(ProjectController());
   final AuthController authController = Get.find<AuthController>();
   String _filter = 'all';
@@ -25,6 +36,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   void initState() {
     super.initState();
     controller.fetchProjects();
+    if (widget.openCreateOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showCreateDialog();
+      });
+    }
   }
 
   bool get _canCreate => authController.user['role'] == 'admin' || authController.user['role'] == 'moderator';
@@ -73,7 +89,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               if (controller.isLoading.value) return const Center(child: CircularProgressIndicator());
               final items = _filtered;
               if (items.isEmpty) {
-                return const Center(
+                return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -117,7 +133,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   Widget _statCard(String label, int count, Color color, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(16),
@@ -131,10 +147,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: color, size: 18),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text('$count', style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600)),
+            SizedBox(height: 2),
+            Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -146,7 +162,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: active ? AppTheme.primaryColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(18),
@@ -193,7 +209,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return GestureDetector(
       onTap: () => _openDetails(p),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(20),
@@ -205,42 +221,84 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             // Header image or placeholder
             ...() {
               final mainImg = _mainImageUrl(p);
-              if (mainImg != null)
-                return [
-                  if (_isPdf(mainImg))
-                    Container(
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.05),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.picture_as_pdf, color: Colors.red.shade300, size: 40),
-                            const SizedBox(height: 4),
-                            Text('PDF Document', style: TextStyle(color: Colors.red.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      child: Image.network(
-                        '${ApiConstants.baseUrl}$mainImg',
+              if (mainImg != null) {
+                Future<void> openMainFile() async {
+                  final url = ApiConstants.mediaUrl(mainImg);
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                }
+
+                if (isPdfFile(mainImg) || !isImageFile(mainImg)) {
+                  return [
+                    GestureDetector(
+                      onTap: () async {
+                        await openMainFile();
+                      },
+                      child: Container(
                         height: 140,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 140,
-                          color: AppTheme.primaryColor.withValues(alpha: 0.05),
-                          child: Center(child: Icon(Icons.work_outline, color: AppTheme.primaryColor.withValues(alpha: 0.3), size: 36)),
+                        decoration: BoxDecoration(
+                          color: isPdfFile(mainImg)
+                              ? Colors.red.withValues(alpha: 0.05)
+                              : Colors.blueGrey.withValues(alpha: 0.06),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isPdfFile(mainImg) ? Icons.picture_as_pdf : Icons.insert_drive_file_outlined,
+                                color: isPdfFile(mainImg) ? Colors.red.shade300 : Colors.blueGrey.shade300,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isPdfFile(mainImg) ? 'Tap to open PDF' : 'Tap to open file',
+                                style: TextStyle(
+                                  color: isPdfFile(mainImg) ? Colors.red.shade400 : Colors.blueGrey.shade400,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    )
+                    ),
+                  ];
+                }
+
+                return [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    child: Image.network(
+                      ApiConstants.mediaUrl(mainImg),
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => GestureDetector(
+                        onTap: openMainFile,
+                        child: Container(
+                          height: 140,
+                          color: Colors.red.withValues(alpha: 0.05),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.insert_drive_file, color: Colors.red.shade300, size: 36),
+                                const SizedBox(height: 4),
+                                Text('Tap to open file', style: TextStyle(color: Colors.red.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ];
+              }
               return [
                 Container(
                   height: 140,
@@ -276,18 +334,18 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(p['title'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 10),
+                  Text(p['title'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                   if (p['description'] != null) ...[
-                    const SizedBox(height: 6),
-                    Text(p['description'], style: const TextStyle(color: AppTheme.textMuted, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    SizedBox(height: 6),
+                    Text(p['description'], style: TextStyle(color: AppTheme.textMuted, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ],
                   const SizedBox(height: 12),
                   // Progress bar
                   Row(
                     children: [
                       Icon(Icons.trending_up, size: 14, color: AppTheme.primaryColor),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text('Progress', style: TextStyle(color: AppTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600)),
                       const Spacer(),
                       Text('${progress.toInt()}%', style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -307,7 +365,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   if (progressImages.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     ...() {
-                      final inProgressImgs = progressImages.where((f) => f['status'] == 'In Progress').toList();
+                      final inProgressImgs = progressImages.where((f) => (f['status'] ?? 'In Progress') == 'In Progress').toList();
                       final completedImgs = progressImages.where((f) => f['status'] == 'Completed').toList();
                       final widgets = <Widget>[];
                       if (inProgressImgs.isNotEmpty) {
@@ -328,7 +386,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: inProgressImgs.take(4).map((f) {
-                                    final thumbUrl = '${ApiConstants.baseUrl}${f['url']}';
+                                    final thumbUrl = ApiConstants.mediaUrl(f['url']?.toString());
                                     return Padding(
                                       padding: const EdgeInsets.only(right: 4),
                                       child: ClipRRect(
@@ -364,7 +422,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: completedImgs.take(4).map((f) {
-                                    final thumbUrl = '${ApiConstants.baseUrl}${f['url']}';
+                                    final thumbUrl = ApiConstants.mediaUrl(f['url']?.toString());
                                     return Padding(
                                       padding: const EdgeInsets.only(right: 4),
                                       child: ClipRRect(
@@ -387,13 +445,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   const SizedBox(height: 12),
                   // Bottom info row
                   Container(
-                    padding: const EdgeInsets.only(top: 12),
-                    decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderColor, width: 0.5))),
+                    padding: EdgeInsets.only(top: 12),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderColor, width: 0.5))),
                     child: Row(
                       children: [
                         Icon(Icons.location_on_outlined, size: 14, color: AppTheme.primaryColor),
-                        const SizedBox(width: 4),
-                        Text(p['location'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                        SizedBox(width: 4),
+                        Text(p['location'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                         const Spacer(),
                         if (p['budget'] != null)
                           Container(
@@ -413,14 +471,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     );
   }
 
-  bool _isPdf(String? url) {
-    return url != null && url.toLowerCase().endsWith('.pdf');
+  bool _isPdf(String? url, {String? mime, String? name}) {
+    return isPdfFile(url, mime: mime, name: name);
   }
 
   void _confirmDelete(String id) {
     Get.defaultDialog(
       title: 'Delete Project',
-      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+      titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
       backgroundColor: AppTheme.surfaceColor,
       middleText: 'Are you sure you want to delete this project?',
       textConfirm: 'Delete',
@@ -457,176 +515,633 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             _openDetails(updated);
           }
         },
-        onUploadFile: (targetStatus) async => _uploadProgressFile(details, targetStatus),
+        onUploadFile: (targetStatus) async {
+          final updated = await _uploadProgressFile(details, targetStatus);
+          if (updated != null && mounted) {
+            Navigator.pop(context);
+            _openDetails(updated);
+          }
+        },
       ),
     );
   }
 
-  void _uploadProgressFile(dynamic project, String targetStatus) async {
-    final result = await FilePicker.pickFiles();
-    if (result == null || result.files.isEmpty) return;
+  Future<Map<String, dynamic>?> _uploadProgressFile(dynamic project, String targetStatus) async {
+    String? localPath;
+    String? fileName;
 
-    final file = result.files.first;
+    try {
+      final raw = await _pickerChannel.invokeMethod<String>('pickProgressImage');
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List && decoded.isNotEmpty) {
+          final first = Map<String, dynamic>.from(decoded.first as Map);
+          localPath = first['path']?.toString();
+          fileName = first['name']?.toString();
+        }
+      }
+    } catch (_) {
+      // Fall back to FilePicker if native channel fails
+    }
+
+    if (localPath == null || localPath.isEmpty || !File(localPath).existsSync()) {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return null;
+      final file = result.files.first;
+      Get.showSnackbar(const GetSnackBar(
+        message: 'Uploading image...',
+        duration: Duration(seconds: 2),
+      ));
+      final url = await ApiService.uploadPlatformFile(file);
+      if (url == null) {
+        Get.snackbar('Upload failed', ApiService.lastUploadError ?? 'Could not upload image');
+        return null;
+      }
+      final updated = await controller.addProgressFile(project['_id'], url, targetStatus);
+      if (updated == null) {
+        Get.snackbar('Error', 'Could not save progress image');
+        return null;
+      }
+      await controller.fetchProjects();
+      Get.snackbar(
+        'Success',
+        targetStatus == 'Completed' ? 'Marked 100% complete' : 'Progress set to 50%',
+      );
+      return updated;
+    }
+
     Get.showSnackbar(GetSnackBar(
-      message: 'Uploading ${file.name}...',
+      message: 'Uploading ${fileName ?? 'image'}...',
       duration: const Duration(seconds: 2),
     ));
 
-    final url = await ApiService.uploadPlatformFile(file);
-    if (url == null) return;
+    final url = await ApiService.uploadLocalPath(localPath, filename: fileName ?? 'progress.jpg');
+    if (url == null) {
+      Get.snackbar('Upload failed', ApiService.lastUploadError ?? 'Could not upload image');
+      return null;
+    }
 
     final updated = await controller.addProgressFile(project['_id'], url, targetStatus);
-
-    if (updated != null) {
-      if (targetStatus == 'In Progress' && (project['status'] ?? '') == 'Planning') {
-        await controller.updateProject(project['_id'], {'status': 'In Progress'});
-      } else if (targetStatus == 'Completed') {
-        await controller.updateProject(project['_id'], {'status': 'Completed', 'progress': 100});
-      }
-      await controller.fetchProjects();
-      Get.snackbar('Success', 'File uploaded successfully');
+    if (updated == null) {
+      Get.snackbar('Error', 'Could not save progress image');
+      return null;
     }
+
+    await controller.fetchProjects();
+    Get.snackbar(
+      'Success',
+      targetStatus == 'Completed' ? 'Marked 100% complete' : 'Progress set to 50%',
+    );
+    return updated;
   }
 
-  void _showCreateDialog() {
+  Future<void> _showCreateDialog() async {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final budgetCtrl = TextEditingController();
     final locationCtrl = TextEditingController();
     String status = 'Planning';
     String? imageUrl;
+    String? localPath;
+    String? pendingFileName;
     bool uploading = false;
+    String? errorMsg;
+    var didSchedulePoll = false;
 
-    Get.defaultDialog(
-      title: 'Register New Project',
-      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
-      backgroundColor: AppTheme.surfaceColor,
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return Container(
-            width: Get.width * 0.85,
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: titleCtrl, decoration: _inputDecoration('Project Title')),
-                  const SizedBox(height: 12),
-                  Row(
+    final draft = await ProjectDraftStore.load();
+    if (draft != null) {
+      titleCtrl.text = (draft['title'] ?? '').toString();
+      descCtrl.text = (draft['description'] ?? '').toString();
+      locationCtrl.text = (draft['location'] ?? '').toString();
+      budgetCtrl.text = (draft['budget'] ?? '').toString();
+      status = (draft['status'] ?? 'Planning').toString();
+      final savedUrl = (draft['imageUrl'] ?? '').toString();
+      if (savedUrl.isNotEmpty) imageUrl = savedUrl;
+      final savedLocal = (draft['localPath'] ?? '').toString();
+      final savedName = (draft['localName'] ?? '').toString();
+      if (savedLocal.isNotEmpty && File(savedLocal).existsSync()) {
+        localPath = savedLocal;
+        pendingFileName =
+            savedName.isNotEmpty ? savedName : savedLocal.split(RegExp(r'[\\/]')).last;
+      }
+    }
+
+    Future<void> persistDraft() async {
+      await ProjectDraftStore.save(
+        title: titleCtrl.text,
+        description: descCtrl.text,
+        location: locationCtrl.text,
+        budget: budgetCtrl.text,
+        status: status,
+        imageUrl: imageUrl,
+        localPath: localPath,
+        localName: pendingFileName,
+      );
+    }
+
+    Future<void> applyStaged(
+      List<Map<String, String>> staged,
+      void Function(void Function()) setDialogState,
+    ) async {
+      if (staged.isEmpty) return;
+      final path = staged.first['path'] ?? '';
+      final name = staged.first['name'] ?? 'file';
+      if (path.isEmpty || !File(path).existsSync()) return;
+
+      // Show file immediately — do not wait for server upload
+      setDialogState(() {
+        localPath = path;
+        pendingFileName = name;
+        errorMsg = null;
+        uploading = true;
+      });
+      await persistDraft();
+
+      final url = await ApiService.uploadLocalPath(path, filename: name);
+      setDialogState(() {
+        uploading = false;
+        if (url != null) {
+          imageUrl = url;
+          errorMsg = null;
+        } else {
+          errorMsg = ApiService.lastUploadError ??
+              'Upload pending — tap Save to retry, or pick the file again';
+        }
+      });
+      await persistDraft();
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickProjectFile() async {
+              await persistDraft();
+              await ProjectDraftStore.markResume();
+              // Clear any leftover forum staging from older bugs
+              try {
+                await ForumDraftStore.consumeStagedFiles();
+              } catch (_) {}
+
+              String? raw;
+              try {
+                raw = await _pickerChannel
+                    .invokeMethod<String>('pickProjectFile')
+                    .timeout(const Duration(minutes: 3));
+              } on PlatformException catch (e) {
+                if (dialogContext.mounted) {
+                  setDialogState(() => errorMsg = e.message ?? 'Could not open file picker');
+                }
+                return;
+              } catch (_) {
+                raw = null;
+              }
+
+              List<Map<String, String>> stagedList = [];
+              if (raw != null && raw.isNotEmpty) {
+                try {
+                  stagedList = (jsonDecode(raw) as List)
+                      .map((e) => Map<String, String>.from(
+                            (e as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+                          ))
+                      .toList();
+                } catch (_) {}
+              }
+              if (stagedList.isEmpty) {
+                for (var i = 0; i < 20; i++) {
+                  stagedList = await ProjectDraftStore.peekStagedFiles();
+                  if (stagedList.isNotEmpty) break;
+                  await Future.delayed(const Duration(milliseconds: 400));
+                  if (!dialogContext.mounted) return;
+                }
+              }
+              await ProjectDraftStore.consumeStagedFiles();
+              if (!dialogContext.mounted) return;
+              await applyStaged(stagedList, setDialogState);
+            }
+
+            if (!didSchedulePoll &&
+                widget.openCreateOnStart &&
+                imageUrl == null &&
+                localPath == null) {
+              didSchedulePoll = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                for (var i = 0; i < 20; i++) {
+                  if (!dialogContext.mounted) return;
+                  if (imageUrl != null || localPath != null) return;
+                  final peeked = await ProjectDraftStore.peekStagedFiles();
+                  if (peeked.isNotEmpty) {
+                    await ProjectDraftStore.consumeStagedFiles();
+                    await applyStaged(peeked, setDialogState);
+                    return;
+                  }
+                  await Future.delayed(const Duration(milliseconds: 400));
+                }
+              });
+            }
+
+            final displayName = pendingFileName ?? '';
+            final isPdf = isPdfFile(imageUrl, name: displayName);
+            final isImage = isImageFile(imageUrl, name: displayName);
+            final hasFile = imageUrl != null || localPath != null;
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              backgroundColor: AppTheme.surfaceColor,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(child: TextField(controller: locationCtrl, decoration: _inputDecoration('District / Location'))),
-                      const SizedBox(width: 12),
-                      Expanded(child: TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: _inputDecoration('Budget (USD)'))),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: status,
-                    decoration: InputDecoration(filled: true, fillColor: AppTheme.backgroundColor, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                    items: const [
-                      DropdownMenuItem(value: 'Planning', child: Text('Planning')),
-                      DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
-                      DropdownMenuItem(value: 'Completed', child: Text('Completed')),
-                    ],
-                    onChanged: (v) => setState(() => status = v ?? 'Planning'),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryColor.withOpacity(0.15)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.auto_graph, size: 16, color: AppTheme.primaryColor),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Auto Progress: ${status == 'Completed' ? 100 : status == 'In Progress' ? 50 : 0}% (auto)',
-                          style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                      const Text(
+                        'Register New Project',
+                        style: TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: () async {
-                      final result = await FilePicker.pickFiles();
-                      if (result != null && result.files.isNotEmpty) {
-                        setState(() => uploading = true);
-                        final url = await ApiService.uploadPlatformFile(result.files.first);
-                        setState(() {
-                          imageUrl = url;
-                          uploading = false;
-                        });
-                      }
-                    },
-                    child: Container(
-                      height: 80,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.borderColor, width: 1.5, style: BorderStyle.solid),
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: uploading
-                          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                          : imageUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Stack(
-                                    children: [
-                                      Center(child: Icon(Icons.description, color: AppTheme.primaryColor, size: 30)),
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: GestureDetector(
-                                          onTap: () => setState(() => imageUrl = null),
-                                          child: Container(
-                                            padding: const EdgeInsets.all(2),
-                                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                            child: const Icon(Icons.close, size: 12, color: Colors.white),
+                      const SizedBox(height: 24),
+                      if (errorMsg != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            errorMsg!,
+                            style: const TextStyle(
+                              color: Color(0xFFEF4444),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      TextField(
+                        controller: titleCtrl,
+                        onChanged: (_) => persistDraft(),
+                        decoration: InputDecoration(
+                          hintText: 'Project Title',
+                          filled: true,
+                          fillColor: const Color(0xFFF1F5F9),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: locationCtrl,
+                              onChanged: (_) => persistDraft(),
+                              decoration: InputDecoration(
+                                hintText: 'District / Location',
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextField(
+                              controller: budgetCtrl,
+                              keyboardType: TextInputType.number,
+                              onChanged: (_) => persistDraft(),
+                              decoration: InputDecoration(
+                                hintText: 'Budget (USD)',
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: status,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFFF1F5F9),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                        items: const [
+                          DropdownMenuItem(value: 'Planning', child: Text('Planning')),
+                          DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
+                          DropdownMenuItem(value: 'Completed', child: Text('Completed')),
+                        ],
+                        onChanged: (v) {
+                          setDialogState(() => status = v ?? 'Planning');
+                          persistDraft();
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.auto_graph, size: 16, color: Color(0xFF3B82F6)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Auto Progress: ${status == 'Completed' ? 100 : status == 'In Progress' ? 50 : 0}%',
+                              style: const TextStyle(
+                                color: Color(0xFF1D4ED8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: uploading ? null : pickProjectFile,
+                        child: Container(
+                          width: double.infinity,
+                          constraints: const BoxConstraints(minHeight: 100),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: hasFile ? const Color(0xFFD1FAE5) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: hasFile ? AppTheme.primaryColor : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: hasFile
+                              ? Stack(
+                                  children: [
+                                    Center(
+                                      child: uploading
+                                          ? Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const SizedBox(
+                                                  width: 28,
+                                                  height: 28,
+                                                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Text(
+                                                  displayName.isNotEmpty ? displayName : 'Uploading…',
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF334155),
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            )
+                                          : Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isPdf
+                                                      ? Icons.picture_as_pdf
+                                                      : (isImage ? Icons.check_circle : Icons.insert_drive_file),
+                                                  size: 36,
+                                                  color: isPdf
+                                                      ? const Color(0xFFEF4444)
+                                                      : (isImage
+                                                          ? AppTheme.primaryColor
+                                                          : const Color(0xFF64748B)),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  displayName.isNotEmpty
+                                                      ? displayName
+                                                      : (isPdf
+                                                          ? 'PDF selected'
+                                                          : (isImage ? 'Image selected' : 'File selected')),
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: isPdf
+                                                        ? const Color(0xFFEF4444)
+                                                        : (isImage
+                                                            ? const Color(0xFF047857)
+                                                            : const Color(0xFF475569)),
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                    ),
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setDialogState(() {
+                                            imageUrl = null;
+                                            localPath = null;
+                                            pendingFileName = null;
+                                            errorMsg = null;
+                                          });
+                                          persistDraft();
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
                                           ),
+                                          child: const Icon(Icons.close, size: 14, color: Colors.white),
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 )
-                              : Column(
+                              : const Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.upload_file, color: AppTheme.textSubtle, size: 20),
-                                    const SizedBox(height: 4),
-                                    Text('Upload project file (optional)', style: TextStyle(color: AppTheme.textSubtle, fontSize: 11)),
+                                    Icon(Icons.upload_file, size: 32, color: Color(0xFF94A3B8)),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Upload Project File',
+                                      style: TextStyle(color: Color(0xFF475569), fontSize: 14),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Any file type (optional)',
+                                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    ),
                                   ],
                                 ),
-                    ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 3,
+                        onChanged: (_) => persistDraft(),
+                        decoration: InputDecoration(
+                          hintText: 'Full Description',
+                          filled: true,
+                          fillColor: const Color(0xFFF1F5F9),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                await ProjectDraftStore.clear();
+                                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: Color(0xFF334155),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: uploading
+                                  ? null
+                                  : () async {
+                                      if (titleCtrl.text.isEmpty || locationCtrl.text.isEmpty) {
+                                        setDialogState(
+                                          () => errorMsg = 'Title and Location are required',
+                                        );
+                                        return;
+                                      }
+                                      setDialogState(() => errorMsg = null);
+
+                                      var finalUrl = imageUrl;
+                                      if (finalUrl == null &&
+                                          localPath != null &&
+                                          File(localPath!).existsSync()) {
+                                        setDialogState(() => uploading = true);
+                                        finalUrl = await ApiService.uploadLocalPath(
+                                          localPath!,
+                                          filename: pendingFileName ?? 'file',
+                                        );
+                                        setDialogState(() {
+                                          uploading = false;
+                                          imageUrl = finalUrl;
+                                        });
+                                        if (finalUrl == null) {
+                                          setDialogState(() {
+                                            errorMsg = ApiService.lastUploadError ??
+                                                'Failed to upload file';
+                                          });
+                                          return;
+                                        }
+                                      }
+
+                                      final success = await controller.createProject({
+                                        'title': titleCtrl.text.trim(),
+                                        'description': descCtrl.text.trim(),
+                                        'budget': budgetCtrl.text.isNotEmpty
+                                            ? num.tryParse(budgetCtrl.text)
+                                            : null,
+                                        'location': locationCtrl.text.trim(),
+                                        'status': status,
+                                        if (finalUrl != null) 'imageUrl': finalUrl,
+                                      });
+                                      if (success) {
+                                        await ProjectDraftStore.clear();
+                                        if (dialogContext.mounted) {
+                                          Navigator.pop(dialogContext);
+                                        }
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'Save',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(controller: descCtrl, maxLines: 3, decoration: _inputDecoration('Full Description')),
-                ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      textConfirm: 'Save Project',
-      textCancel: 'Cancel',
-      confirmTextColor: Colors.white,
-      onConfirm: () async {
-        if (titleCtrl.text.isEmpty || locationCtrl.text.isEmpty) {
-          Get.snackbar('Error', 'Title and Location are required');
-          return;
-        }
-        final success = await controller.createProject({
-          'title': titleCtrl.text.trim(),
-          'description': descCtrl.text.trim(),
-          'budget': budgetCtrl.text.isNotEmpty ? num.tryParse(budgetCtrl.text) : null,
-          'location': locationCtrl.text.trim(),
-          'status': status,
-          if (imageUrl != null) 'imageUrl': imageUrl,
-        });
-        if (success) Get.back();
+            );
+          },
+        );
       },
     );
   }
@@ -634,7 +1149,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textSubtle),
+      hintStyle: TextStyle(color: AppTheme.textSubtle),
       filled: true,
       fillColor: AppTheme.backgroundColor,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -661,23 +1176,32 @@ class _DetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = (project['progress'] ?? 0).toDouble();
     final progressImages = (project['progressImages'] as List?) ?? [];
-    final inProgressFiles = progressImages.where((f) => f['status'] == 'In Progress').toList();
-    final completedFiles = progressImages.where((f) => f['status'] == 'Completed').toList();
+    final inProgressFiles = progressImages.where((f) {
+      final s = (f['status'] ?? 'In Progress').toString();
+      return s == 'In Progress';
+    }).toList();
+    final completedFiles = progressImages.where((f) => (f['status'] ?? '').toString() == 'Completed').toList();
     final comments = (project['comments'] as List?) ?? [];
+    final status = (project['status'] ?? 'Planning').toString();
+    final statusColor = status == 'Completed'
+        ? Colors.green
+        : status == 'In Progress'
+            ? Colors.orange
+            : Colors.blue;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (_, scrollCtrl) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
             Container(
-              margin: const EdgeInsets.only(top: 12),
+              margin: EdgeInsets.only(top: 12),
               width: 40,
               height: 4,
               decoration: BoxDecoration(color: AppTheme.borderColor, borderRadius: BorderRadius.circular(2)),
@@ -687,11 +1211,11 @@ class _DetailsSheet extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(Icons.work_outline, color: AppTheme.primaryColor, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('Project Details', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                  const Spacer(),
+                  SizedBox(width: 8),
+                  Text('Project Details', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: AppTheme.textMuted),
+                    icon: Icon(Icons.close, size: 20, color: AppTheme.textMuted),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -700,21 +1224,21 @@ class _DetailsSheet extends StatelessWidget {
             Expanded(
               child: ListView(
                 controller: scrollCtrl,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  Text(project['title'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(project['title'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.blue.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                        child: Text(project['status'] ?? '', style: TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
+                        decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                        child: Text(status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Icon(Icons.location_on_outlined, size: 14, color: AppTheme.primaryColor),
-                      const SizedBox(width: 3),
-                      Text(project['location'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                      SizedBox(width: 3),
+                      Text(project['location'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                       const SizedBox(width: 12),
                       if (project['budget'] != null) ...[
                         Icon(Icons.attach_money, size: 14, color: Colors.green.shade500),
@@ -723,8 +1247,8 @@ class _DetailsSheet extends StatelessWidget {
                     ],
                   ),
                   if (project['description'] != null) ...[
-                    const SizedBox(height: 12),
-                    Text(project['description'], style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.5)),
+                    SizedBox(height: 12),
+                    Text(project['description'], style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.5)),
                   ],
                   const SizedBox(height: 20),
                   // Progress
@@ -743,7 +1267,7 @@ class _DetailsSheet extends StatelessWidget {
                         Row(
                           children: [
                             Icon(Icons.trending_up, size: 16, color: AppTheme.primaryColor),
-                            const SizedBox(width: 6),
+                            SizedBox(width: 6),
                             Text('Project Progress', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                             const Spacer(),
                             Text('${progress.toInt()}%', style: TextStyle(color: AppTheme.primaryColor, fontSize: 14, fontWeight: FontWeight.bold)),
@@ -781,7 +1305,7 @@ class _DetailsSheet extends StatelessWidget {
                     )
                   else
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('No progress files uploaded yet.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic)),
                     ),
 
@@ -803,7 +1327,7 @@ class _DetailsSheet extends StatelessWidget {
                     )
                   else
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('No completed files uploaded yet.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic)),
                     ),
 
@@ -869,15 +1393,15 @@ class _DetailsSheet extends StatelessWidget {
                   Row(
                     children: [
                       Icon(Icons.comment_outlined, size: 16, color: AppTheme.primaryColor),
-                      const SizedBox(width: 6),
-                      Text('Comments (${comments.length})', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                      SizedBox(width: 6),
+                      Text('Comments (${comments.length})', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const SizedBox(height: 12),
                   if (comments.isNotEmpty)
                     ...comments.map((c) => Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
+                      margin: EdgeInsets.only(bottom: 10),
+                      padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppTheme.backgroundColor,
                         borderRadius: BorderRadius.circular(14),
@@ -888,22 +1412,22 @@ class _DetailsSheet extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(c['authorName'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
-                              const Spacer(),
+                              Text(c['authorName'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+                              Spacer(),
                               Text(
                                 c['createdAt'] != null ? DateFormat('MMM d, yyyy HH:mm').format(DateTime.parse(c['createdAt'])) : '',
-                                style: const TextStyle(color: AppTheme.textSubtle, fontSize: 10),
+                                style: TextStyle(color: AppTheme.textSubtle, fontSize: 10),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(c['text'] ?? '', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4)),
+                          SizedBox(height: 6),
+                          Text(c['text'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4)),
                         ],
                       ),
                     ))
                   else
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: 12),
                       child: Text('No comments yet.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic)),
                     ),
 
@@ -916,7 +1440,7 @@ class _DetailsSheet extends StatelessWidget {
                           controller: commentCtrl,
                           decoration: InputDecoration(
                             hintText: 'Add your feedback...',
-                            hintStyle: const TextStyle(color: AppTheme.textSubtle),
+                            hintStyle: TextStyle(color: AppTheme.textSubtle),
                             filled: true,
                             fillColor: AppTheme.backgroundColor,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -954,16 +1478,18 @@ class _DetailsSheet extends StatelessWidget {
   }
 
   Widget _buildFileThumbnail(dynamic file, Color color) {
-    final url = '${ApiConstants.baseUrl}${file['url']}';
-    final isPdf = (file['url'] as String?)?.toLowerCase().endsWith('.pdf') ?? false;
+    final raw = file['url']?.toString();
+    final url = ApiConstants.mediaUrl(raw);
+    final kind = fileKind(raw);
+    final isPdf = kind == 'pdf';
+    final isImage = kind == 'image';
 
     return GestureDetector(
       onTap: () async {
-        if (isPdf) {
+        if (isPdf || !isImage) {
           final uri = Uri.parse(url);
           if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else {
-          // Show image in full screen
           showDialog(
             context: Get.context!,
             builder: (_) => Dialog(
@@ -1003,12 +1529,21 @@ class _DetailsSheet extends StatelessWidget {
                   Text('PDF', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
                 ],
               )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(url, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.image, color: color, size: 28),
-                ),
-              ),
+            : isImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(url, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(Icons.image, color: color, size: 28),
+                    ),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.insert_drive_file, color: color, size: 28),
+                      const SizedBox(height: 4),
+                      Text('File', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
       ),
     );
   }

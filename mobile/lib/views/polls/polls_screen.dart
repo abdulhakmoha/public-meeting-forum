@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/poll_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/app_notification.dart';
 import '../../utils/theme.dart';
 
 class PollsScreen extends StatefulWidget {
@@ -83,10 +84,10 @@ class _PollsScreenState extends State<PollsScreen> {
                       Container(
                         width: 72, height: 72,
                         decoration: BoxDecoration(color: AppTheme.primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                        child: const Icon(Icons.how_to_vote, size: 36, color: AppTheme.textSubtle),
+                        child: Icon(Icons.how_to_vote, size: 36, color: AppTheme.textSubtle),
                       ),
-                      const SizedBox(height: 16),
-                      const Text('No polls available', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
+                      SizedBox(height: 16),
+                      Text('No polls available', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
                     ],
                   ),
                 );
@@ -109,7 +110,7 @@ class _PollsScreenState extends State<PollsScreen> {
   Widget _statCard(String label, String value, Color color, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(12),
@@ -118,7 +119,7 @@ class _PollsScreenState extends State<PollsScreen> {
         child: Column(
           children: [
             Icon(icon, color: color, size: 16),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
             Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 9)),
           ],
@@ -132,7 +133,7 @@ class _PollsScreenState extends State<PollsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isActive ? AppTheme.primaryColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(18),
@@ -152,8 +153,8 @@ class _PollsScreenState extends State<PollsScreen> {
     final hasVoted = (poll['voters'] as List?)?.contains(authId) ?? false;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: 14),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(20),
@@ -165,7 +166,7 @@ class _PollsScreenState extends State<PollsScreen> {
           Row(
             children: [
               Expanded(child: Text(poll['title'] ?? poll['question'] ?? 'Poll',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold))),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -175,7 +176,7 @@ class _PollsScreenState extends State<PollsScreen> {
                 child: Text(isOpen ? 'OPEN' : 'CLOSED', style: TextStyle(color: isOpen ? Colors.green : Colors.red, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
               if (_isAdmin) ...[
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 GestureDetector(
                   onTap: () => controller.togglePollStatus(poll['_id']),
                   child: Icon(isOpen ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: isOpen ? Colors.green : AppTheme.textSubtle),
@@ -183,17 +184,36 @@ class _PollsScreenState extends State<PollsScreen> {
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: () async {
-                    final confirmed = await Get.defaultDialog(
-                      title: 'Delete Poll',
-                      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
-                      backgroundColor: AppTheme.surfaceColor,
-                      middleText: 'Delete this poll?',
-                      textConfirm: 'Delete',
-                      textCancel: 'Cancel',
-                      confirmTextColor: Colors.white,
-                      buttonColor: Colors.red,
+                    final confirmed = await Get.dialog<bool>(
+                      AlertDialog(
+                        backgroundColor: AppTheme.surfaceColor,
+                        title: Text(
+                          'Delete Poll',
+                          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+                        ),
+                        content: Text(
+                          'Delete this poll?',
+                          style: TextStyle(color: AppTheme.textMuted),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Get.back(result: false),
+                            child: Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Get.back(result: true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
                     );
-                    if (confirmed != null) controller.deletePoll(poll['_id']);
+                    if (confirmed == true) {
+                      await controller.deletePoll(poll['_id']);
+                    }
                   },
                   child: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 16),
                 ),
@@ -201,8 +221,8 @@ class _PollsScreenState extends State<PollsScreen> {
             ],
           ),
           if (poll['description'] != null) ...[
-            const SizedBox(height: 6),
-            Text(poll['description'], style: const TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
+            SizedBox(height: 6),
+            Text(poll['description'], style: TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
           ],
           if (meetingId != null && meetingId is String) ...[
             const SizedBox(height: 6),
@@ -253,7 +273,7 @@ class _PollsScreenState extends State<PollsScreen> {
               ),
             );
           }).toList(),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Row(
             children: [
               Text('$totalVotes total votes', style: TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
@@ -266,7 +286,7 @@ class _PollsScreenState extends State<PollsScreen> {
           ),
           if (poll['createdAt'] != null)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: 4),
               child: Text('Created ${DateFormat('MMM d, yyyy').format(DateTime.parse(poll['createdAt']))}',
                   style: TextStyle(color: AppTheme.textSubtle, fontSize: 9)),
             ),
@@ -278,62 +298,153 @@ class _PollsScreenState extends State<PollsScreen> {
   void _showCreatePollDialog() {
     final titleCtrl = TextEditingController();
     final optionsCtrl = [TextEditingController(), TextEditingController()];
-    Get.defaultDialog(
-      title: 'Create Poll',
-      titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
-      backgroundColor: AppTheme.surfaceColor,
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return Container(
-            width: Get.width * 0.85,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: titleCtrl, decoration: _inputDeco('Poll question')),
-                const SizedBox(height: 12),
-                ...optionsCtrl.asMap().entries.map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              backgroundColor: AppTheme.surfaceColor,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(child: TextField(controller: e.value, decoration: _inputDeco('Option ${e.key + 1}'))),
-                      if (optionsCtrl.length > 2)
-                        IconButton(
-                          icon: Icon(Icons.remove_circle_outline, color: AppTheme.errorColor, size: 20),
-                          onPressed: () {
-                            setState(() {
-                              e.value.dispose();
-                              optionsCtrl.removeAt(e.key);
-                            });
-                          },
+                      const Text(
+                        'Create Poll',
+                        style: TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      const SizedBox(height: 24),
+                      if (errorMsg != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            errorMsg!,
+                            style: const TextStyle(color: Color(0xFFEF4444), fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      TextField(
+                        controller: titleCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Poll question',
+                          filled: true,
+                          fillColor: const Color(0xFFF1F5F9),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ...optionsCtrl.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: e.value,
+                                decoration: InputDecoration(
+                                  hintText: 'Option ${e.key + 1}',
+                                  filled: true,
+                                  fillColor: const Color(0xFFF1F5F9),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                ),
+                              ),
+                            ),
+                            if (optionsCtrl.length > 2) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 24),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    e.value.dispose();
+                                    optionsCtrl.removeAt(e.key);
+                                  });
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      )),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => setDialogState(() => optionsCtrl.add(TextEditingController())),
+                          icon: const Icon(Icons.add, size: 20, color: AppTheme.primaryColor),
+                          label: const Text('Add Option', style: TextStyle(color: AppTheme.primaryColor, fontSize: 14, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              child: const Text('Cancel', style: TextStyle(color: Color(0xFF334155), fontSize: 16, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final opts = optionsCtrl.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
+                                if (titleCtrl.text.isEmpty || opts.length < 2) {
+                                  setDialogState(() => errorMsg = 'Title and at least 2 options required');
+                                  return;
+                                }
+                                setDialogState(() => errorMsg = null);
+                                final success = await controller.createPoll({
+                                  'question': titleCtrl.text.trim(),
+                                  'options': opts.map((t) => {'text': t}).toList(),
+                                });
+                                if (success && context.mounted) {
+                                  Navigator.pop(context);
+                                  Future.microtask(() {
+                                    AppNotification.success(
+                                      'Poll Created',
+                                      'Poll created successfully',
+                                    );
+                                  });
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                elevation: 0,
+                              ),
+                              child: const Text('Create', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                )),
-                TextButton.icon(
-                  onPressed: () => setState(() => optionsCtrl.add(TextEditingController())),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Option'),
                 ),
-              ],
-            ),
-          );
-        },
-      ),
-      textConfirm: 'Create',
-      textCancel: 'Cancel',
-      confirmTextColor: Colors.white,
-      onConfirm: () async {
-        final opts = optionsCtrl.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
-        if (titleCtrl.text.isEmpty || opts.length < 2) {
-          Get.snackbar('Error', 'Title and at least 2 options required');
-          return;
-        }
-        final success = await controller.createPoll({
-          'title': titleCtrl.text.trim(),
-          'options': opts.map((t) => {'text': t}).toList(),
-        });
-        if (success) Get.back();
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -341,7 +452,7 @@ class _PollsScreenState extends State<PollsScreen> {
   InputDecoration _inputDeco(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textSubtle),
+      hintStyle: TextStyle(color: AppTheme.textSubtle),
       filled: true, fillColor: AppTheme.backgroundColor,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
     );

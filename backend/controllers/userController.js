@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -74,8 +75,28 @@ exports.updateProfile = async (req, res) => {
         user.profilePicture = `/uploads/${req.file.filename}`;
       }
 
-      if (req.body.password) {
-        user.password = req.body.password;
+      // Password change only via newPassword + currentPassword (no bare `password` field)
+      if (req.body.password && !req.body.newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Use newPassword with currentPassword to change password',
+        });
+      }
+
+      if (req.body.newPassword) {
+        if (!req.body.currentPassword) {
+          return res.status(400).json({ success: false, message: 'Current password is required' });
+        }
+        if (String(req.body.newPassword).length < 6) {
+          return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+        }
+        const withPass = await User.findById(req.user._id).select('+password');
+        const match = await bcrypt.compare(req.body.currentPassword, withPass.password);
+        if (!match) {
+          return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+        }
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(String(req.body.newPassword), salt);
       }
 
       const updatedUser = await user.save();
@@ -88,7 +109,8 @@ exports.updateProfile = async (req, res) => {
           role: updatedUser.role,
           phone: updatedUser.phone,
           district: updatedUser.district,
-          profilePicture: updatedUser.profilePicture
+          profilePicture: updatedUser.profilePicture || '',
+          profileImage: updatedUser.profilePicture || '',
         }
       });
     } else {

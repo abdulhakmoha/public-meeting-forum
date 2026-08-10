@@ -146,7 +146,7 @@ exports.deleteProject = async (req, res) => {
 
 // @desc    Add progress photo to project
 // @route   POST /api/projects/:id/photos
-// @access  Private
+// @access  Private (Admin/Moderator)
 exports.addProjectPhoto = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);

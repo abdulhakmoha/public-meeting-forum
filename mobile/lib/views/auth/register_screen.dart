@@ -66,12 +66,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: AppTheme.primaryColor.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_add_outlined, size: 40, color: AppTheme.primaryColor),
+                    child: Icon(Icons.person_add_outlined, size: 40, color: AppTheme.primaryColor),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Create Account', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
-                  const SizedBox(height: 8),
-                  const Text('Join the community forum', style: TextStyle(color: AppTheme.textSubtle)),
+                  SizedBox(height: 16),
+                  Text('Create Account', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                  SizedBox(height: 8),
+                  Text('Join the community forum', style: TextStyle(color: AppTheme.textSubtle)),
                   const SizedBox(height: 32),
 
                   _buildTextField(_nameController, Icons.person_outline, 'Full Name',
@@ -129,7 +129,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Already have an account? ', style: TextStyle(color: AppTheme.textSubtle)),
+                      Text('Already have an account? ', style: TextStyle(color: AppTheme.textSubtle)),
                       GestureDetector(
                         onTap: () => Get.back(),
                         child: const Text('Sign In', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
@@ -155,12 +155,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       keyboardType: keyboardType,
       obscureText: obscure,
       validator: validator,
-      style: const TextStyle(color: AppTheme.textPrimary),
+      style: TextStyle(color: AppTheme.textPrimary),
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: AppTheme.textSubtle),
         suffixIcon: suffixIcon,
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSubtle),
+        hintStyle: TextStyle(color: AppTheme.textSubtle),
         filled: true,
         fillColor: AppTheme.surfaceColor,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppTheme.borderColor)),

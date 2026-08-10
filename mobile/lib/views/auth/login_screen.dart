@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
                   
                   // Header text
-                  const Text(
+                  Text(
                     'Welcome Back',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Sign in to access your civic dashboard',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -94,8 +94,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: AppTheme.textPrimary),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppTheme.textPrimary),
+                    decoration: InputDecoration(
                       hintText: 'Email address',
                       prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSubtle),
                     ),
@@ -115,8 +115,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    style: const TextStyle(color: AppTheme.textPrimary),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppTheme.textPrimary),
+                    decoration: InputDecoration(
                       hintText: 'Password',
                       prefixIcon: Icon(Icons.lock_outline, color: AppTheme.textSubtle),
                     ),
@@ -148,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("Don't have an account? ", style: TextStyle(color: AppTheme.textSubtle)),
+                      Text("Don't have an account? ", style: TextStyle(color: AppTheme.textSubtle)),
                       GestureDetector(
                         onTap: () => Get.to(() => const RegisterScreen()),
                         child: const Text('Sign Up', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),

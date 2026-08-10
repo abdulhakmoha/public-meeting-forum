@@ -54,19 +54,22 @@ exports.getForum = async (req, res) => {
 // @access  Private
 exports.createForum = async (req, res) => {
   try {
-    req.body.author = req.user.id;
-    
-    // Auto approve if created by admin/moderator
-    if (req.user.role === 'admin' || req.user.role === 'moderator') {
-      req.body.isApproved = true;
-    }
+    const isStaff = req.user.role === 'admin' || req.user.role === 'moderator';
+    const images = req.files
+      ? req.files.map((file) => `/uploads/${file.filename}`)
+      : [];
 
-    if (req.files) {
-      req.body.images = req.files.map(file => `/uploads/${file.filename}`);
-    }
+    // Whitelist fields — never trust client isApproved / author / votes
+    const forum = await Forum.create({
+      title: req.body.title,
+      description: req.body.description,
+      category: req.body.category || 'General',
+      images,
+      author: req.user.id,
+      isApproved: isStaff,
+      status: 'open',
+    });
 
-    const forum = await Forum.create(req.body);
-    
     res.status(201).json({ success: true, data: forum });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

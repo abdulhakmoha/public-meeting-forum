@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../controllers/user_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/api_constants.dart';
 import '../../utils/theme.dart';
 
 class UsersScreen extends StatefulWidget {
@@ -40,14 +41,14 @@ class _UsersScreenState extends State<UsersScreen> {
               controller: searchCtrl,
               decoration: InputDecoration(
                 hintText: 'Search by name, email, or district...',
-                hintStyle: const TextStyle(color: AppTheme.textSubtle, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
+                hintStyle: TextStyle(color: AppTheme.textSubtle, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
                 filled: true,
                 fillColor: AppTheme.surfaceColor,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
               onChanged: (v) => controller.searchQuery.value = v,
             ),
           ),
@@ -63,10 +64,10 @@ class _UsersScreenState extends State<UsersScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.people_outline, size: 64, color: AppTheme.textSubtle),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       Text('No users found', style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
                       if (controller.searchQuery.value.isNotEmpty)
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                       if (controller.searchQuery.value.isNotEmpty)
                         Text('Try a different search term', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
                     ],
@@ -112,7 +113,7 @@ class _UsersScreenState extends State<UsersScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -128,37 +129,43 @@ class _UsersScreenState extends State<UsersScreen> {
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
-                  child: user['profileImage'] != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: Image.network(
-                            '${apiBaseUrl()}${user['profileImage']}',
-                            width: 44, height: 44, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Text(initial, style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
-                          ),
-                        )
-                      : Text(initial, style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
+                  child: () {
+                    final picUrl = ApiConstants.mediaUrl(
+                      (user['profileImage'] ?? user['profilePicture'])?.toString(),
+                    );
+                    if (picUrl.isEmpty) {
+                      return Text(initial, style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 18));
+                    }
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.network(
+                        picUrl,
+                        width: 44, height: 44, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Text(initial, style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
+                      ),
+                    );
+                  }(),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
+                      Text(name, style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 2),
                       Text('Joined ${createdAt.isNotEmpty ? DateFormat('MMM yyyy').format(DateTime.parse(createdAt)) : ''}',
-                          style: const TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
+                          style: TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
                     ],
                   ),
                 ),
                 if (_isAdmin && !isSelf)
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
+                    icon: Icon(Icons.more_vert, color: AppTheme.textMuted, size: 18),
                         onSelected: (v) async {
                           if (v == 'delete') {
                             final confirmed = await Get.defaultDialog(
                               title: 'Delete User',
-                              titleStyle: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+                              titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
                               backgroundColor: AppTheme.surfaceColor,
                               middleText: 'Are you sure you want to delete $name?',
                               textConfirm: 'Delete',
@@ -185,7 +192,7 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppTheme.backgroundColor,
                 borderRadius: BorderRadius.circular(12),
@@ -214,17 +221,14 @@ class _UsersScreenState extends State<UsersScreen> {
     return Row(
       children: [
         Icon(icon1, size: 14, color: AppTheme.textSubtle),
-        const SizedBox(width: 6),
-        Expanded(child: Text(text1, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))),
+        SizedBox(width: 6),
+        Expanded(child: Text(text1, style: TextStyle(color: AppTheme.textMuted, fontSize: 11))),
         SizedBox(width: 12),
         Icon(icon2, size: 14, color: AppTheme.textSubtle),
-        const SizedBox(width: 6),
-        Text(text2, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+        SizedBox(width: 6),
+        Text(text2, style: TextStyle(color: AppTheme.textMuted, fontSize: 11)),
       ],
     );
   }
 
-  String apiBaseUrl() {
-    return 'http://10.0.2.2:5001';
-  }
 }

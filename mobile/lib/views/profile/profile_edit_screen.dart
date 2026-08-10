@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/api_constants.dart';
 import '../../utils/theme.dart';
 
 class ProfileEditScreen extends StatefulWidget {
@@ -62,7 +63,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Widget build(BuildContext context) {
     final user = authController.user;
     final initial = (user['name'] ?? 'U').toString().substring(0, 1).toUpperCase();
-    final profileUrl = user['profileImage'] != null ? 'http://10.0.2.2:5001${user['profileImage']}' : null;
+    final pic = user['profileImage'] ?? user['profilePicture'];
+    final profileUrl = (() {
+      final u = ApiConstants.mediaUrl(pic?.toString());
+      return u.isEmpty ? null : u;
+    })();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -97,7 +102,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       child: GestureDetector(
                         onTap: _uploading ? null : _handlePickImage,
                         child: Container(
-                          padding: const EdgeInsets.all(6),
+                          padding: EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: _uploading ? AppTheme.textSubtle : AppTheme.primaryColor,
                             shape: BoxShape.circle,
@@ -111,8 +116,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(user['name'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+              SizedBox(height: 12),
+              Text(user['name'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
@@ -155,16 +160,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontMeta, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
+        Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontMeta, fontWeight: FontWeight.w600)),
+        SizedBox(height: 8),
         TextFormField(
           controller: controller, keyboardType: keyboardType,
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: AppTheme.textPrimary),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: AppTheme.textSubtle),
             filled: true, fillColor: AppTheme.surfaceColor,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.borderColor)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppTheme.borderColor)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),

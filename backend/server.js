@@ -12,12 +12,14 @@ const app = express();
 // Manual CORS middleware - must be FIRST before everything
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  // Allow github.io (GitHub Pages), vercel.app, and localhost
+  // Allow github.io (GitHub Pages), vercel.app, localhost, and local network (192.168.x.x)
   if (
     origin.includes('github.io') ||
     origin.includes('vercel.app') ||
     origin.includes('localhost') ||
-    origin.includes('127.0.0.1')
+    origin.includes('127.0.0.1') ||
+    origin.includes('192.168.') ||
+    origin.includes('10.')
   ) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }

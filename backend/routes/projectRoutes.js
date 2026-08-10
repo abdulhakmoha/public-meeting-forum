@@ -24,6 +24,6 @@ router.route('/:id/comments')
   .post(protect, addProjectComment);
 
 router.route('/:id/photos')
-  .post(protect, addProjectPhoto);
+  .post(protect, authorize('admin', 'moderator'), addProjectPhoto);
 
 module.exports = router;

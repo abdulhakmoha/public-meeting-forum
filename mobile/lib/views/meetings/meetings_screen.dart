@@ -77,16 +77,16 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                   controller: searchCtrl,
                   decoration: InputDecoration(
                     hintText: 'Search by title...',
-                    hintStyle: const TextStyle(color: AppTheme.textSubtle, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
+                    hintStyle: TextStyle(color: AppTheme.textSubtle, fontSize: 13),
+                    prefixIcon: Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
                     suffixIcon: _search.isNotEmpty
-                        ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () { searchCtrl.clear(); setState(() => _search = ''); })
+                        ? IconButton(icon: Icon(Icons.clear, size: 16), onPressed: () { searchCtrl.clear(); setState(() => _search = ''); })
                         : null,
                     filled: true, fillColor: AppTheme.surfaceColor,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                   onChanged: (v) => setState(() => _search = v),
                 ),
                 const SizedBox(height: 8),
@@ -126,12 +126,12 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                       Container(
                         width: 64, height: 64,
                         decoration: BoxDecoration(color: AppTheme.primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(18)),
-                        child: const Icon(Icons.event_busy_outlined, size: 30, color: AppTheme.textSubtle),
+                        child: Icon(Icons.event_busy_outlined, size: 30, color: AppTheme.textSubtle),
                       ),
-                      const SizedBox(height: 14),
-                      const Text('No meetings found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 14)),
-                      const SizedBox(height: 4),
-                      const Text('Check back later.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
+                      SizedBox(height: 14),
+                      Text('No meetings found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 14)),
+                      SizedBox(height: 4),
+                      Text('Check back later.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
                     ],
                   ),
                 );
@@ -158,14 +158,14 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                   children: [
                     if (upcoming.isNotEmpty) ...[
                       Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 6),
+                        padding: EdgeInsets.only(top: 12, bottom: 6),
                         child: Text('UPCOMING', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
                       ),
                       ...upcoming.map((m) => _buildMeetingCard(m, false)),
                     ],
                     if (past.isNotEmpty) ...[
                       Padding(
-                        padding: const EdgeInsets.only(top: 20, bottom: 6),
+                        padding: EdgeInsets.only(top: 20, bottom: 6),
                         child: Text('PAST MEETINGS', style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
                       ),
                       ...past.map((m) => _buildMeetingCard(m, true)),
@@ -192,7 +192,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _districtFilter = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: active ? AppTheme.primaryColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(16),
@@ -214,7 +214,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor,
             borderRadius: BorderRadius.circular(16),
@@ -223,16 +223,16 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
           child: Column(
             children: [
               Text('Meetings in ${DateFormat('MMMM yyyy').format(now)}',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+              SizedBox(height: 16),
               if (thisMonth.isEmpty)
-                const Text('No meetings this month', style: TextStyle(color: AppTheme.textSubtle))
+                Text('No meetings this month', style: TextStyle(color: AppTheme.textSubtle))
               else
                 ...thisMonth.map((m) {
                   final d = DateTime.parse(m['date']);
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
+                    margin: EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppTheme.backgroundColor,
                       borderRadius: BorderRadius.circular(10),
@@ -249,8 +249,8 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                             child: Text('${d.day}', style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(m['title'] ?? '', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                        SizedBox(width: 12),
+                        Expanded(child: Text(m['title'] ?? '', style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
                       ],
                     ),
                   );
@@ -274,7 +274,7 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
       child: Opacity(
         opacity: isPast ? 0.55 : 1.0,
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
+          margin: EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor,
             borderRadius: BorderRadius.circular(16),
@@ -300,14 +300,14 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                       children: [
                         Expanded(
                           child: Text(meeting['title'] ?? 'Untitled',
-                              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                              style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                         ),
                         const SizedBox(width: 8),
                         if (isPast)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(color: AppTheme.textSubtle.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                            child: const Text('ENDED', style: TextStyle(color: AppTheme.textSubtle, fontSize: 9, fontWeight: FontWeight.bold)),
+                            child: Text('ENDED', style: TextStyle(color: AppTheme.textSubtle, fontSize: 9, fontWeight: FontWeight.bold)),
                           )
                         else
                           _statusChip(status),
@@ -335,14 +335,14 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                       ],
                     ),
                     if (meeting['description'] != null && (meeting['description'] as String).isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Text(meeting['description'],
-                          style: const TextStyle(color: AppTheme.textSubtle, fontSize: 12),
+                          style: TextStyle(color: AppTheme.textSubtle, fontSize: 12),
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: AppTheme.backgroundColor.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(10),
@@ -352,36 +352,36 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
                           Row(
                             children: [
                               Icon(Icons.calendar_today_outlined, size: 12, color: isPast ? AppTheme.textSubtle : AppTheme.primaryColor),
-                              const SizedBox(width: 5),
+                              SizedBox(width: 5),
                               Text(date != null ? DateFormat('MMM d, yyyy').format(date) : 'TBD',
-                                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-                              const SizedBox(width: 8),
+                                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                              SizedBox(width: 8),
                               Icon(Icons.access_time_outlined, size: 12, color: isPast ? AppTheme.textSubtle : AppTheme.primaryColor),
                               const SizedBox(width: 3),
                               Text(
                                 meeting['startTime'] != null && meeting['endTime'] != null
                                     ? '${meeting['startTime']} — ${meeting['endTime']}'
                                     : '',
-                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                                style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                             ],
                           ),
-                          const SizedBox(height: 5),
+                          SizedBox(height: 5),
                           Row(
                             children: [
                               Icon(Icons.location_on_outlined, size: 12, color: isPast ? AppTheme.textSubtle : AppTheme.primaryColor),
-                              const SizedBox(width: 5),
-                              Expanded(child: Text(location, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10), overflow: TextOverflow.ellipsis)),
+                              SizedBox(width: 5),
+                              Expanded(child: Text(location, style: TextStyle(color: AppTheme.textMuted, fontSize: 10), overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     Row(
                       children: [
                         Icon(Icons.people_outline, size: 12, color: isPast ? AppTheme.textSubtle : AppTheme.primaryColor),
-                        const SizedBox(width: 3),
-                        Text('$attendees', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                        SizedBox(width: 3),
+                        Text('$attendees', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
                         const Spacer(),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -403,8 +403,8 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
 
   Color _statusBarColor(String status) {
     switch (status) {
-      case 'upcoming': return const Color(0xFF22C55E);
-      case 'ongoing': return const Color(0xFF3B82F6);
+      case 'upcoming': return Color(0xFF22C55E);
+      case 'ongoing': return Color(0xFF3B82F6);
       case 'cancelled': return AppTheme.errorColor;
       default: return AppTheme.textSubtle;
     }
@@ -413,8 +413,8 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   Widget _statusChip(String status) {
     Color color;
     switch (status) {
-      case 'upcoming': color = const Color(0xFF22C55E); break;
-      case 'ongoing': color = const Color(0xFF3B82F6); break;
+      case 'upcoming': color = Color(0xFF22C55E); break;
+      case 'ongoing': color = Color(0xFF3B82F6); break;
       case 'cancelled': color = AppTheme.errorColor; break;
       default: color = AppTheme.textSubtle;
     }

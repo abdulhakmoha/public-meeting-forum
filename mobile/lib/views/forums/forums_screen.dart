@@ -22,6 +22,39 @@ class _ForumsScreenState extends State<ForumsScreen> {
 
   bool get _isMod => authCtrl.user['role'] == 'admin' || authCtrl.user['role'] == 'moderator' || authCtrl.user['role'] == 'secretary';
 
+  Future<void> _confirmDeleteForum(dynamic forum) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        backgroundColor: AppTheme.surfaceColor,
+        title: Text(
+          'Delete Forum',
+          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Delete "${forum['title'] ?? 'this topic'}"? This cannot be undone.',
+          style: TextStyle(color: AppTheme.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await controller.deleteForum(forum['_id']);
+    }
+  }
+
   List get _filtered {
     var items = controller.forumsList.where((f) {
       if (_tab == 'active' && f['isApproved'] == false) return false;
@@ -54,16 +87,16 @@ class _ForumsScreenState extends State<ForumsScreen> {
               controller: searchCtrl,
               decoration: InputDecoration(
                 hintText: 'Search by title...',
-                hintStyle: const TextStyle(color: AppTheme.textSubtle, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
+                hintStyle: TextStyle(color: AppTheme.textSubtle, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textSubtle, size: 20),
                 suffixIcon: _search.isNotEmpty
-                    ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () { searchCtrl.clear(); setState(() => _search = ''); })
+                    ? IconButton(icon: Icon(Icons.clear, size: 16), onPressed: () { searchCtrl.clear(); setState(() => _search = ''); })
                     : null,
                 filled: true, fillColor: AppTheme.surfaceColor,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
               ),
-              style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
               onChanged: (v) => setState(() => _search = v),
             ),
           ),
@@ -77,7 +110,7 @@ class _ForumsScreenState extends State<ForumsScreen> {
                   const SizedBox(width: 6),
                   _tabChip('pending', 'Pending (${_pendingCount})'),
                 ],
-                const Spacer(),
+                Spacer(),
                 if (_isMod)
                   PopupMenuButton<String>(
                     icon: Icon(Icons.filter_list, color: AppTheme.textSubtle, size: 18),
@@ -110,10 +143,10 @@ class _ForumsScreenState extends State<ForumsScreen> {
                         decoration: BoxDecoration(color: AppTheme.primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
                         child: Icon(Icons.forum_outlined, size: 36, color: AppTheme.textSubtle),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       Text(_tab == 'pending' ? 'No pending topics' : 'No forum topics found.',
                           style: TextStyle(color: AppTheme.textMuted, fontSize: 14)),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(_tab == 'pending' ? 'All topics have been reviewed.' : 'Start a discussion!',
                           style: TextStyle(color: AppTheme.textSubtle, fontSize: 12)),
                     ],
@@ -145,7 +178,7 @@ class _ForumsScreenState extends State<ForumsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _tab = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: active ? AppTheme.primaryColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(16),
@@ -165,7 +198,7 @@ class _ForumsScreenState extends State<ForumsScreen> {
     return GestureDetector(
       onTap: () => Get.to(() => ForumDetailsScreen(forumId: forum['_id'])),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        margin: EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(20),
@@ -192,9 +225,9 @@ class _ForumsScreenState extends State<ForumsScreen> {
                       child: Text('PENDING', style: TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.bold)),
                     ),
                   ],
-                  const Spacer(),
+                  Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: AppTheme.backgroundColor, borderRadius: BorderRadius.circular(10)),
                     child: Row(
                       children: [
@@ -204,34 +237,56 @@ class _ForumsScreenState extends State<ForumsScreen> {
                       ],
                     ),
                   ),
-                  if (isPending && _isMod) ...[
+                  if (_isMod) ...[
                     const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => controller.approveForum(forum['_id']),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-                        child: Icon(Icons.check_circle, color: Colors.green, size: 14),
+                    if (isPending)
+                      GestureDetector(
+                        onTap: () => controller.approveForum(forum['_id']),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
+                    if (isPending) const SizedBox(width: 6),
                     GestureDetector(
-                      onTap: () => controller.deleteForum(forum['_id']),
+                      onTap: () => _confirmDeleteForum(forum),
                       child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-                        child: Icon(Icons.cancel, color: Colors.red, size: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withOpacity(0.25)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.delete_outline, color: Colors.red, size: 16),
+                            SizedBox(width: 4),
+                            Text(
+                              'Delete',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Text(forum['title'] ?? 'Untitled Topic',
-                  style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 6),
+                  style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+              SizedBox(height: 6),
               Text(forum['description'] ?? 'No content provided.',
-                  style: const TextStyle(color: AppTheme.textSubtle, fontSize: 12),
+                  style: TextStyle(color: AppTheme.textSubtle, fontSize: 12),
                   maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 12),
               Row(
@@ -240,14 +295,14 @@ class _ForumsScreenState extends State<ForumsScreen> {
                     radius: 10,
                     backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
                     child: Text((author['name'] ?? 'U').toString().substring(0, 1).toUpperCase(),
-                        style: const TextStyle(color: AppTheme.primaryColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                        style: TextStyle(color: AppTheme.primaryColor, fontSize: 9, fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 6),
-                  Text(author['name'] ?? 'Unknown', style: const TextStyle(color: AppTheme.textMuted, fontSize: 10)),
-                  const Spacer(),
+                  SizedBox(width: 6),
+                  Text(author['name'] ?? 'Unknown', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                  Spacer(),
                   Icon(Icons.comment_outlined, size: 14, color: AppTheme.textSubtle),
-                  const SizedBox(width: 4),
-                  Text('$commentsCount', style: const TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
+                  SizedBox(width: 4),
+                  Text('$commentsCount', style: TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
                 ],
               ),
               if (!isPending)

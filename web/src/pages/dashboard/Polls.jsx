@@ -4,6 +4,7 @@ import { BarChart3, Vote, CheckCircle, Plus, X, Trash2, ChevronRight, Calendar }
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 const D = {
   bg:      'var(--color-bg-elevated)',
@@ -31,18 +32,19 @@ export default function Polls() {
 
   useEffect(() => { fetchPolls(); }, []);
 
-  const fetchPolls = async () => {
-    setLoading(true);
+  const fetchPolls = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
-      // Fetch polls across all meetings
       const res = await api.get('/polls');
       setPolls(res.data.data || []);
     } catch (err) {
       console.error('Error fetching polls:', err);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
+
+  useLivePoll(() => fetchPolls(true), 8000);
 
   const handleVote = async (pollId, optionId) => {
     setVotingId(pollId);

@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
+import useLivePoll from '../../hooks/useLivePoll';
 
 const C = {
   bg: '#FFFFFF',
@@ -56,19 +57,22 @@ export default function DashboardOverview() {
   const { user } = useContext(AuthContext);
   const isAdmin = user?.role === 'admin';
 
+  const fetchStats = async (quiet = false) => {
+    try {
+      const res = await api.get('/dashboard/stats');
+      setStatsData(res.data.data);
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await api.get('/dashboard/stats');
-        setStatsData(res.data.data);
-      } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
   }, []);
+
+  useLivePoll(() => fetchStats(true), 10000);
 
   const stats = [
     {

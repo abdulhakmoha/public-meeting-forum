@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../utils/api_constants.dart';
+import '../utils/app_notification.dart';
+import '../utils/live_poll.dart';
 
 class MeetingController extends GetxController {
   var isLoading = true.obs;
@@ -10,15 +13,25 @@ class MeetingController extends GetxController {
   var meetingPolls = [].obs;
   var isDetailLoading = true.obs;
 
+  late final VoidCallback _liveRefresh;
+
   @override
   void onInit() {
     super.onInit();
     fetchMeetings();
+    _liveRefresh = () => fetchMeetings(quiet: true);
+    LivePoll.register(_liveRefresh);
   }
 
-  Future<void> fetchMeetings() async {
+  @override
+  void onClose() {
+    LivePoll.unregister(_liveRefresh);
+    super.onClose();
+  }
+
+  Future<void> fetchMeetings({bool quiet = false}) async {
     try {
-      isLoading(true);
+      if (!quiet) isLoading(true);
       final response = await ApiService.get(ApiConstants.meetings);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -27,7 +40,7 @@ class MeetingController extends GetxController {
     } catch (e) {
       print('Error fetching meetings: $e');
     } finally {
-      isLoading(false);
+      if (!quiet) isLoading(false);
     }
   }
 
@@ -63,15 +76,15 @@ class MeetingController extends GetxController {
       final response = await ApiService.post('${ApiConstants.meetings}/$meetingId/join', {});
       if (response.statusCode == 200 || response.statusCode == 201) {
         await fetchMeetingDetails(meetingId);
-        Get.snackbar('Success', 'You have joined the meeting');
+        AppNotification.success('Joined!', 'You have joined the meeting');
         return true;
       } else {
         final data = jsonDecode(response.body);
-        Get.snackbar('Error', data['message'] ?? 'Failed to join');
+        AppNotification.error(data['message'] ?? 'Failed to join');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -81,15 +94,14 @@ class MeetingController extends GetxController {
       final response = await ApiService.post(ApiConstants.meetings, meetingData);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await fetchMeetings();
-        Get.snackbar('Success', 'Meeting created successfully');
         return true;
       } else {
         final data = jsonDecode(response.body);
-        Get.snackbar('Error', data['message'] ?? 'Failed to create meeting');
+        AppNotification.error(data['message'] ?? 'Failed to create meeting');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -101,11 +113,11 @@ class MeetingController extends GetxController {
         return true;
       } else {
         final data = jsonDecode(response.body);
-        Get.snackbar('Error', data['message'] ?? 'Failed to vote');
+        AppNotification.error(data['message'] ?? 'Failed to vote');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -115,10 +127,10 @@ class MeetingController extends GetxController {
       final response = await ApiService.delete('${ApiConstants.meetings}/$id');
       if (response.statusCode == 200) {
         await fetchMeetings();
-        Get.snackbar('Success', 'Meeting deleted');
+        AppNotification.success('Deleted', 'Meeting deleted');
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not delete meeting');
+      AppNotification.error('Could not delete meeting');
     }
   }
 
@@ -128,12 +140,12 @@ class MeetingController extends GetxController {
       if (response.statusCode == 200) {
         await fetchMeetingDetails(meetingId);
         await fetchMeetings();
-        Get.snackbar('Success', 'Meeting cancelled');
+        AppNotification.success('Cancelled', 'Meeting cancelled');
         return true;
       }
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not cancel meeting');
+      AppNotification.error('Could not cancel meeting');
       return false;
     }
   }
@@ -144,14 +156,14 @@ class MeetingController extends GetxController {
       if (response.statusCode == 200) {
         await fetchMeetingDetails(meetingId);
         await fetchMeetings();
-        Get.snackbar('Success', 'Meeting updated');
+        AppNotification.success('Updated', 'Meeting updated');
         return true;
       }
       final body = jsonDecode(response.body);
-      Get.snackbar('Error', body['message'] ?? 'Failed to update meeting');
+      AppNotification.error(body['message'] ?? 'Failed to update meeting');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -163,14 +175,14 @@ class MeetingController extends GetxController {
         if (data['meetingId'] != null) {
           await fetchMeetingPolls(data['meetingId']);
         }
-        Get.snackbar('Success', 'Poll created');
+        AppNotification.success('Poll Created', 'Poll created successfully');
         return true;
       }
       final body = jsonDecode(response.body);
-      Get.snackbar('Error', body['message'] ?? 'Failed to create poll');
+      AppNotification.error(body['message'] ?? 'Failed to create poll');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }

@@ -36,6 +36,8 @@ Thumbs.db
 # Uploads & temporary storage
 uploads/
 temp/
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep
 
 # Flutter / Mobile build files
 .dart_tool/

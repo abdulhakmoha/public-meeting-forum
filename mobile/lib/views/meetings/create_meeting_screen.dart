@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/meeting_controller.dart';
+import '../../utils/app_notification.dart';
 import '../../utils/theme.dart';
 
 class CreateMeetingScreen extends StatefulWidget {
@@ -111,6 +112,13 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     final success = await controller.createMeeting(meetingData);
     if (success) {
       Get.back();
+      // Show after leaving create screen so Get.back() does not dismiss the dialog
+      Future.microtask(() {
+        AppNotification.success(
+          'Meeting Successful',
+          'Meeting scheduled successfully',
+        );
+      });
     }
   }
 
@@ -152,7 +160,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(14),
+                  padding: EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(14),
@@ -212,8 +220,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontBody, fontWeight: FontWeight.w600)),
+      padding: EdgeInsets.only(bottom: 8),
+      child: Text(text, style: TextStyle(color: AppTheme.textMuted, fontSize: AppTheme.fontBody, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -223,10 +231,10 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       controller: controller,
       maxLines: maxLines,
       validator: validator,
-      style: const TextStyle(color: AppTheme.textPrimary),
+      style: TextStyle(color: AppTheme.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSubtle),
+        hintStyle: TextStyle(color: AppTheme.textSubtle),
         filled: true,
         fillColor: AppTheme.surfaceColor,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppTheme.borderColor)),
@@ -243,7 +251,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       children: [
         _buildLabel('Meeting Type'),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor,
             borderRadius: BorderRadius.circular(14),
@@ -254,7 +262,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
               value: _meetingType,
               isExpanded: true,
               dropdownColor: AppTheme.surfaceColor,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               items: const [
                 DropdownMenuItem(value: 'physical', child: Text('Physical')),
                 DropdownMenuItem(value: 'zoom', child: Text('Zoom')),
@@ -273,7 +281,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       children: [
         _buildLabel('Category'),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor,
             borderRadius: BorderRadius.circular(14),
@@ -284,7 +292,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
               value: _category,
               isExpanded: true,
               dropdownColor: AppTheme.surfaceColor,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               items: const [
                 DropdownMenuItem(value: 'General', child: Text('General')),
                 DropdownMenuItem(value: 'Banadir', child: Text('Banadir')),

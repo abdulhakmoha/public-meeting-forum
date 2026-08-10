@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../utils/api_constants.dart';
+import '../utils/app_notification.dart';
 
 class PollController extends GetxController {
   var isLoading = false.obs;
@@ -40,11 +41,14 @@ class PollController extends GetxController {
       if (response.statusCode == 200) {
         hasVoted[pollId] = true;
         await fetchPolls();
+        AppNotification.success('Voted', 'Your vote has been recorded');
         return true;
       }
+      AppNotification.error('Failed to submit vote');
       return false;
     } catch (e) {
       print('Error voting: $e');
+      AppNotification.error('Could not connect to server');
       return false;
     } finally {
       isSubmitting.value = false;
@@ -57,14 +61,13 @@ class PollController extends GetxController {
       final response = await ApiService.post(ApiConstants.polls, data);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await fetchPolls();
-        Get.snackbar('Success', 'Poll created');
         return true;
       }
       final body = jsonDecode(response.body);
-      Get.snackbar('Error', body['message'] ?? 'Failed to create poll');
+      AppNotification.error(body['message'] ?? 'Failed to create poll');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     } finally {
       isSubmitting.value = false;
@@ -76,12 +79,13 @@ class PollController extends GetxController {
       final response = await ApiService.put('${ApiConstants.polls}/$pollId/status', {});
       if (response.statusCode == 200) {
         await fetchPolls();
-        Get.snackbar('Success', 'Poll status updated');
+        AppNotification.success('Updated', 'Poll status updated');
         return true;
       }
+      AppNotification.error('Failed to update poll');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not update poll');
+      AppNotification.error('Could not update poll');
       return false;
     }
   }
@@ -91,12 +95,13 @@ class PollController extends GetxController {
       final response = await ApiService.delete('${ApiConstants.polls}/$pollId');
       if (response.statusCode == 200) {
         polls.removeWhere((p) => p['_id'] == pollId);
-        Get.snackbar('Success', 'Poll deleted');
+        AppNotification.success('Deleted', 'Poll deleted');
         return true;
       }
+      AppNotification.error('Failed to delete poll');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not delete poll');
+      AppNotification.error('Could not delete poll');
       return false;
     }
   }

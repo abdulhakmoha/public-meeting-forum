@@ -14,26 +14,28 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { name, email, phone, district, password, role } = req.body;
+    const { name, email, phone, district, password } = req.body;
 
-    // Check if user exists
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Hash password
+    // Hash only after plaintext validation (schema minlength would otherwise check the hash)
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(String(password), salt);
 
-    // Create user
     const user = await User.create({
       name,
       email,
       phone,
       district,
       password: hashedPassword,
-      role: 'citizen' // Security fix: force default role to citizen
+      role: 'citizen',
     });
 
     if (user) {
@@ -42,7 +44,11 @@ exports.register = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id)
+        phone: user.phone,
+        district: user.district,
+        profilePicture: user.profilePicture || '',
+        profileImage: user.profilePicture || '',
+        token: generateToken(user._id),
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -76,7 +82,11 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id)
+        phone: user.phone,
+        district: user.district,
+        profilePicture: user.profilePicture || '',
+        profileImage: user.profilePicture || '',
+        token: generateToken(user._id),
       });
     } else {
       res.status(401).json({ message: 'Login failed: Incorrect email or password.' });
@@ -84,5 +94,33 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+};
+
+// @desc    Current user (session check)
+// @route   GET /api/auth/me
+// @access  Private
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id || req.user._id);
+    if (!user) {
+      return res.status(401).json({ message: 'Not authorized, user not found' });
+    }
+    res.json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        district: user.district,
+        profilePicture: user.profilePicture || '',
+        profileImage: user.profilePicture || '',
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import '../utils/api_constants.dart';
+import '../utils/app_notification.dart';
 
 class UserController extends GetxController {
   var isLoading = false.obs;
@@ -27,7 +28,7 @@ class UserController extends GetxController {
         usersList.value = data['data'] ?? data;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not load users');
+      AppNotification.error('Could not load users');
     } finally {
       isLoading.value = false;
     }
@@ -38,14 +39,14 @@ class UserController extends GetxController {
       final response = await ApiService.put('${ApiConstants.users}/$userId/role', {'role': role});
       if (response.statusCode == 200) {
         await fetchUsers();
-        Get.snackbar('Success', 'Role updated');
+        AppNotification.success('Updated', 'Role updated successfully');
         return true;
       }
       final data = jsonDecode(response.body);
-      Get.snackbar('Error', data['message'] ?? 'Failed to update role');
+      AppNotification.error(data['message'] ?? 'Failed to update role');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }
@@ -55,14 +56,14 @@ class UserController extends GetxController {
       final response = await ApiService.delete('${ApiConstants.users}/$userId');
       if (response.statusCode == 200) {
         usersList.removeWhere((u) => u['_id'] == userId);
-        Get.snackbar('Success', 'User deleted');
+        AppNotification.success('Deleted', 'User deleted');
         return true;
       }
       final data = jsonDecode(response.body);
-      Get.snackbar('Error', data['message'] ?? 'Failed to delete user');
+      AppNotification.error(data['message'] ?? 'Failed to delete user');
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     }
   }

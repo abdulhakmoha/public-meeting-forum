@@ -2,27 +2,76 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/session_hooks.dart';
 import '../utils/api_constants.dart';
+import '../utils/api_config.dart';
+import '../utils/app_notification.dart';
 
 class AuthController extends GetxController {
   var isLoading = false.obs;
   var isAuthenticated = false.obs;
+  var isReady = false.obs;
   var user = {}.obs;
 
   @override
   void onInit() {
     super.onInit();
-    checkLoginStatus();
+    onApiUnauthorized = logout;
+  }
+
+  @override
+  void onClose() {
+    if (onApiUnauthorized == logout) {
+      onApiUnauthorized = null;
+    }
+    super.onClose();
   }
 
   Future<void> checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    final userDataString = prefs.getString('user');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final userDataString = prefs.getString('user');
 
-    if (token != null && userDataString != null) {
+      if (token == null || token.isEmpty || userDataString == null) {
+        isAuthenticated.value = false;
+        user.value = {};
+        return;
+      }
+
+      // Trust cached session first so UI can open; then validate with server.
+      try {
+        user.value = jsonDecode(userDataString) as Map<String, dynamic>;
+      } catch (_) {
+        await logout();
+        return;
+      }
       isAuthenticated.value = true;
-      user.value = jsonDecode(userDataString);
+
+      try {
+        final response = await ApiService.get(ApiConstants.me);
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final body = jsonDecode(response.body);
+          final me = body is Map && body['data'] is Map
+              ? Map<String, dynamic>.from(body['data'] as Map)
+              : Map<String, dynamic>.from(body as Map);
+          user.value = me;
+          await prefs.setString('user', jsonEncode(me));
+          isAuthenticated.value = true;
+        } else if (response.statusCode == 401) {
+          // ApiService already triggers logout on 401
+          isAuthenticated.value = false;
+          user.value = {};
+        }
+        // Other errors (network): keep cached session
+      } catch (_) {
+        // Offline / server down — keep local session
+      }
+    } catch (_) {
+      isAuthenticated.value = false;
+      user.value = {};
+    } finally {
+      isReady.value = true;
     }
   }
 
@@ -48,11 +97,13 @@ class AuthController extends GetxController {
 
         return true;
       } else {
-        Get.snackbar('Error', data['message'] ?? 'Login failed');
+        AppNotification.error(data['message'] ?? 'Login failed');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error(
+        'Could not connect to server (${ApiConfig.instance.origin}). Check USB + adb reverse, or set API Server in Settings.',
+      );
       return false;
     } finally {
       isLoading.value = false;
@@ -84,11 +135,13 @@ class AuthController extends GetxController {
 
         return true;
       } else {
-        Get.snackbar('Error', data['message'] ?? 'Registration failed');
+        AppNotification.error(data['message'] ?? 'Registration failed');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error(
+        'Could not connect to server (${ApiConfig.instance.origin}). Check USB + adb reverse, or set API Server in Settings.',
+      );
       return false;
     } finally {
       isLoading.value = false;
@@ -108,14 +161,14 @@ class AuthController extends GetxController {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user', jsonEncode(updatedUser));
 
-        Get.snackbar('Success', 'Profile updated successfully');
+        AppNotification.success('Success', 'Profile updated successfully');
         return true;
       } else {
-        Get.snackbar('Error', data['message'] ?? 'Failed to update profile');
+        AppNotification.error(data['message'] ?? 'Failed to update profile');
         return false;
       }
     } catch (e) {
-      Get.snackbar('Error', 'Could not connect to server');
+      AppNotification.error('Could not connect to server');
       return false;
     } finally {
       isLoading.value = false;
@@ -143,12 +196,12 @@ class AuthController extends GetxController {
         user.value = updatedUser;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user', jsonEncode(updatedUser));
-        Get.snackbar('Success', 'Profile picture updated');
+        AppNotification.success('Success', 'Profile picture updated');
         return true;
       }
       return false;
     } catch (e) {
-      Get.snackbar('Error', 'Could not upload image');
+      AppNotification.error('Could not upload image');
       return false;
     } finally {
       isLoading.value = false;

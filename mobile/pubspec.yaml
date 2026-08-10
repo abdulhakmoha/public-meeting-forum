@@ -42,6 +42,9 @@ dependencies:
   url_launcher: ^6.3.1
   file_picker: ^11.0.2
   fl_chart: ^0.70.2
+  jitsi_meet_wrapper: ^0.2.0+1
+  path_provider: ^2.1.5
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:
