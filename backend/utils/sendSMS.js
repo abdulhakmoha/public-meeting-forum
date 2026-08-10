@@ -1,42 +1,73 @@
 /**
- * Somali SMS Gateway Utility
- * This utility is designed to work with local providers like Hormuud, Somnet, etc.
+ * Tabaarak ICT SMS (Somalia)
+ * Auth: POST /Auth/SMSLogin → Bearer token
+ * Send: POST /Sms/sendsms
  */
 const axios = require('axios');
 
-const sendSMS = async (phoneNumber, message) => {
-  // Check if Somali SMS API credentials exist in .env
-  const apiURL = process.env.SOMALI_SMS_URL;
-  const username = process.env.SOMALI_SMS_USER;
-  const password = process.env.SOMALI_SMS_PASS;
+const TABAARAK_BASE = 'https://sms.tabaarak.com';
 
-  if (!apiURL || !username) {
-    console.log('--- MOCK SOMALI SMS SENT ---');
+function normalizeMobile(phone) {
+  let p = String(phone || '').replace(/\D/g, '');
+  // 25261xxxxxxx → 61xxxxxxx (Tabaarak examples use 61…)
+  if (p.startsWith('252')) p = p.slice(3);
+  if (p.startsWith('0')) p = p.slice(1);
+  return p;
+}
+
+async function getTabaarakToken() {
+  const name = process.env.TABAARAK_SMS_USER || process.env.SOMALI_SMS_USER;
+  const password = process.env.TABAARAK_SMS_PASS || process.env.SOMALI_SMS_PASS;
+
+  if (!name || !password) return null;
+
+  const res = await axios.post(
+    `${TABAARAK_BASE}/Auth/SMSLogin`,
+    { Name: name, Password: password },
+    { timeout: 20000 }
+  );
+
+  const token = res.data?.data?.token || res.data?.token;
+  if (!token) {
+    throw new Error('Tabaarak login succeeded but no token in response');
+  }
+  return token;
+}
+
+const sendSMS = async (phoneNumber, message) => {
+  const name = process.env.TABAARAK_SMS_USER || process.env.SOMALI_SMS_USER;
+  const password = process.env.TABAARAK_SMS_PASS || process.env.SOMALI_SMS_PASS;
+
+  if (!name || !password) {
+    console.log('--- MOCK SMS (no Tabaarak credentials) ---');
     console.log(`To: ${phoneNumber}`);
     console.log(`Message: ${message}`);
-    console.log('----------------------------');
+    console.log('------------------------------------------');
     return { success: true, message: 'Mock SMS logged to console' };
   }
 
   try {
-    // Most Somali SMS providers use a simple GET or POST request
-    // Format: http://api-url.com/send?user=xxx&pass=xxx&to=252xxxx&text=hello
-    const response = await axios.get(apiURL, {
-      params: {
-        user: username,
-        pass: password,
-        to: phoneNumber,
-        text: message,
-        // Some providers might need extra params like 'sender'
-        sender: process.env.FROM_NAME || 'PMCFMS'
-      }
-    });
+    const token = await getTabaarakToken();
+    const mobile = normalizeMobile(phoneNumber);
 
-    console.log('SMS Provider Response:', response.data);
+    const response = await axios.post(
+      `${TABAARAK_BASE}/Sms/sendsms`,
+      {
+        smsMessage: message,
+        mobile: [mobile],
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 20000,
+      }
+    );
+
+    console.log('Tabaarak SMS response:', response.data);
     return { success: true, data: response.data };
   } catch (error) {
-    console.error('Somali SMS Error:', error.message);
-    return { success: false, error: error.message };
+    const detail = error.response?.data || error.message;
+    console.error('Tabaarak SMS Error:', detail);
+    return { success: false, error: detail };
   }
 };
 
