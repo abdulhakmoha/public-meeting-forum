@@ -41,7 +41,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Set static folder
+// Set static folder + ensure uploads dir exists (Render disk)
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+const fs = require('fs');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Connect to MongoDB
