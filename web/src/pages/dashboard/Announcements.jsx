@@ -48,6 +48,7 @@ export default function Announcements() {
       setAnnouncements([res.data.data, ...announcements]);
       setIsModalOpen(false);
       setNewAnnouncement({ title: '', content: '', category: 'General', date: '' });
+      alert(res.data?.message || 'Announcement published. Email + SMS are being sent to users.');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to publish announcement');
       console.error(err);

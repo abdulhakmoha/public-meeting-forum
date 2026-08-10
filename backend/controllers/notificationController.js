@@ -1,9 +1,9 @@
 const User = require('../models/User');
 const Meeting = require('../models/Meeting');
-const sendEmail = require('../utils/sendEmail');
-const sendSMS = require('../utils/sendSMS');
+const Notification = require('../models/Notification');
+const { deliverToUsers } = require('../utils/deliverToUsers');
 
-// @desc    Send notification to all users about a meeting
+// @desc    Send Email + SMS notification to all citizens about a meeting
 // @route   POST /api/notifications/meeting/:id
 // @access  Private/Admin
 exports.notifyUsersAboutMeeting = async (req, res) => {
@@ -14,50 +14,55 @@ exports.notifyUsersAboutMeeting = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Meeting not found' });
     }
 
-    const users = await User.find({ role: 'citizen' });
-    
-    const notificationPromises = users.map(async (user) => {
-      console.log(`📧 Sending notification to user: ${user.name} (${user.email})`);
-      // 1. Send Email
-      if (user.email) {
-        await sendEmail({
-          email: user.email,
-          subject: `Urgent: Public Meeting - ${meeting.title}`,
-          message: `Dear ${user.name},\n\nYou are invited to a public meeting: ${meeting.title}.\nDate: ${new Date(meeting.date).toLocaleString()}\nLocation: ${meeting.location}\n\nPlease join us to share your thoughts.\n\nBest regards,\nPMCFMS Team`,
-          html: `
-            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-              <h2 style="color: #4f46e5;">Public Meeting Invitation</h2>
-              <p>Dear <strong>${user.name}</strong>,</p>
-              <p>You are invited to participate in an upcoming public meeting:</p>
-              <div style="background: #f8fafc; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0;">
-                <h3 style="margin-top: 0;">${meeting.title}</h3>
-                <p><strong>Date:</strong> ${new Date(meeting.date).toLocaleString()}</p>
-                <p><strong>Location:</strong> ${meeting.location}</p>
-              </div>
-              <p>Your voice matters to our community. We hope to see you there!</p>
-              <br>
-              <p style="font-size: 12px; color: #64748b;">PMCFMS - Community Management System</p>
-            </div>
-          `
-        });
-      }
+    const users = await User.find({ role: 'citizen' }).select('name email phone');
+    const meetingDate = new Date(meeting.date).toLocaleString();
+    const meetingDay = new Date(meeting.date).toLocaleDateString();
 
-      // 2. Send SMS
-      if (user.phone) {
-        const smsMessage = `PMCFMS Alert: Meeting "${meeting.title}" on ${new Date(meeting.date).toLocaleDateString()} at ${meeting.location}. Your participation is needed!`;
-        await sendSMS(user.phone, smsMessage);
-      }
+    // Respond immediately so the browser does not hit Network Error / timeout
+    res.status(202).json({
+      success: true,
+      message: `Sending Email + SMS to ${users.length} citizens now. This continues in the background.`,
+      data: { recipients: users.length },
     });
 
-    await Promise.all(notificationPromises);
-
-    res.status(200).json({
-      success: true,
-      message: `Notifications sent to ${users.length} citizens successfully.`
+    setImmediate(async () => {
+      try {
+        const result = await deliverToUsers(users, {
+          emailSubject: `Public Meeting - ${meeting.title}`,
+          emailText: (user) =>
+            `Dear ${user.name},\n\nYou are invited to a public meeting: ${meeting.title}.\nDate: ${meetingDate}\nLocation: ${meeting.location || 'TBA'}\n\nPlease join us.\n\nBest regards,\nPMCFMS Team`,
+          emailHtml: (user) => `
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+              <h2 style="color: #0d9488;">Public Meeting Invitation</h2>
+              <p>Dear <strong>${user.name}</strong>,</p>
+              <p>You are invited to an upcoming public meeting:</p>
+              <div style="background: #f8fafc; padding: 15px; border-left: 4px solid #0d9488; margin: 20px 0;">
+                <h3 style="margin-top: 0;">${meeting.title}</h3>
+                <p><strong>Date:</strong> ${meetingDate}</p>
+                <p><strong>Location:</strong> ${meeting.location || 'TBA'}</p>
+              </div>
+              <p>Your voice matters. We hope to see you there!</p>
+              <p style="font-size: 12px; color: #64748b;">PMCFMS</p>
+            </div>
+          `,
+          smsMessage: `PMCFMS: Meeting "${meeting.title}" on ${meetingDay} at ${meeting.location || 'TBA'}. Please join.`,
+          inApp: {
+            type: 'meeting_reminder',
+            title: `Meeting: ${meeting.title}`,
+            message: `You are invited to "${meeting.title}" on ${meetingDate}.`,
+            link: `/dashboard/meetings/${meeting._id}`,
+          },
+        });
+        console.log('✅ Meeting notify finished:', result);
+      } catch (err) {
+        console.error('Background meeting notify failed:', err);
+      }
     });
   } catch (error) {
     console.error('Notification Error:', error);
-    res.status(500).json({ success: false, message: 'Error sending notifications' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error sending notifications' });
+    }
   }
 };
 
@@ -66,7 +71,6 @@ exports.notifyUsersAboutMeeting = async (req, res) => {
 // @access  Private
 exports.getNotifications = async (req, res) => {
   try {
-    const Notification = require('../models/Notification');
     const notifications = await Notification.find({ recipient: req.user.id })
       .sort('-createdAt')
       .limit(50);
@@ -81,7 +85,6 @@ exports.getNotifications = async (req, res) => {
 // @access  Private
 exports.readAllNotifications = async (req, res) => {
   try {
-    const Notification = require('../models/Notification');
     await Notification.updateMany({ recipient: req.user.id }, { isRead: true });
     res.status(200).json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {

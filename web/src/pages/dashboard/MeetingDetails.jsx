@@ -153,11 +153,11 @@ export default function MeetingDetails() {
   const [notifying, setNotifying] = useState(false);
 
   const handleNotify = async () => {
-    if (!window.confirm('Send Email notifications to all registered citizens about this meeting?')) return;
+    if (!window.confirm('Send Email + SMS notifications to all registered citizens about this meeting?')) return;
     setNotifying(true);
     try {
-      const res = await api.post(`/notifications/meeting/${id}`);
-      alert(res.data?.message || 'Notifications sent successfully to all citizens!');
+      const res = await api.post(`/notifications/meeting/${id}`, null, { timeout: 60000 });
+      alert(res.data?.message || 'Email + SMS notifications are being sent to all citizens!');
     } catch (error) {
       const msg = error.response?.data?.message || error.message || 'Failed to send notifications. Please try again.';
       alert('Notification Error: ' + msg);
