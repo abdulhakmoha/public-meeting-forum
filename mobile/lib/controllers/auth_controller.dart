@@ -92,7 +92,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       AppNotification.error(
-        'Could not connect to server (${ApiConfig.instance.origin}). Check internet, wait ~1 min, then try again.',
+        'Server-ga lama gaadhin.\nURL: ${ApiConfig.instance.origin}\nInternet hubi, 1 daqiiqo sug, mar kale isku day.\nHaddii URL ay tahay onrender.com: uninstall app, rakib APK-ga cusub.',
       );
       return false;
     } finally {
@@ -130,7 +130,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       AppNotification.error(
-        'Could not connect to server (${ApiConfig.instance.origin}). Check internet, wait ~1 min, then try again.',
+        'Server-ga lama gaadhin.\nURL: ${ApiConfig.instance.origin}\nInternet hubi, 1 daqiiqo sug, mar kale isku day.\nHaddii URL ay tahay onrender.com: uninstall app, rakib APK-ga cusub.',
       );
       return false;
     } finally {
