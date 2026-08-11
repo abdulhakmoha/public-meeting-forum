@@ -2,13 +2,19 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Runtime API host config.
+///
+/// Production uses the **Vercel proxy** (`vercel.app`), not Render directly.
+/// Somalia ISP often blocks/times out `onrender.com`, while `vercel.app` works.
+/// Vercel rewrites `/api/*` → Render, so the phone never talks to onrender.com.
 class ApiConfig {
   ApiConfig._();
   static final ApiConfig instance = ApiConfig._();
 
   static const String _prefsKey = 'api_origin';
   static const int port = 5001;
-  static const String productionOrigin = 'https://public-meeting-forum.onrender.com';
+
+  /// Public entry (reachable). Proxies to Render on the server side.
+  static const String productionOrigin = 'https://public-meeting-forum.vercel.app';
   static const String defaultOrigin = productionOrigin;
 
   /// Override with `--dart-define=API_ORIGIN=http://x.x.x.x:5001` for local/LAN.
@@ -26,14 +32,15 @@ class ApiConfig {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_prefsKey);
 
-    // Drop stale LAN/localhost saves so release APK always uses production cloud API
-    final usingProductionDefault = defaultOrigin.contains('onrender.com');
-    if (usingProductionDefault &&
-        saved != null &&
-        saved.isNotEmpty &&
-        !saved.contains('onrender.com')) {
+    // Always clear old Render / LAN hosts so release APK uses the Vercel proxy
+    final saved = prefs.getString(_prefsKey);
+    if (saved != null &&
+        (saved.contains('onrender.com') ||
+            saved.contains('127.0.0.1') ||
+            saved.contains('localhost') ||
+            saved.contains('192.168.') ||
+            RegExp(r'https?://10\.').hasMatch(saved))) {
       await prefs.remove(_prefsKey);
     }
 
@@ -45,7 +52,6 @@ class ApiConfig {
       if (freshSaved != null && freshSaved.isNotEmpty) _normalizeOrigin(freshSaved),
     ];
 
-    // Only probe local backends when explicitly developing (dart-define override)
     final isLocalOverride = lanOrigin.contains('127.0.0.1') ||
         lanOrigin.contains('localhost') ||
         lanOrigin.contains('192.168.') ||
@@ -71,10 +77,7 @@ class ApiConfig {
       }
     }
 
-    // Always fall back to production for release builds
-    _origin = _normalizeOrigin(
-      unique.isNotEmpty ? unique.first : defaultOrigin,
-    );
+    _origin = _normalizeOrigin(defaultOrigin);
     await prefs.setString(_prefsKey, _origin);
     _ready = true;
   }
@@ -99,11 +102,20 @@ class ApiConfig {
     return v;
   }
 
+  /// Prefer a cheap API ping; fall back to site HTML containing PMCFMS.
   static Future<bool> _isReachable(String origin) async {
+    try {
+      final api = await http
+          .get(Uri.parse('$origin/api/auth/me'))
+          .timeout(const Duration(seconds: 12));
+      // 401 = server reachable (auth required)
+      if (api.statusCode == 401 || api.statusCode == 200) return true;
+    } catch (_) {}
+
     try {
       final res = await http
           .get(Uri.parse('$origin/'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 12));
       return res.statusCode == 200 &&
           res.body.toLowerCase().contains('pmcfms');
     } catch (_) {
