@@ -68,6 +68,10 @@ class AuthController extends GetxController {
   Future<bool> login(String email, String password) async {
     try {
       isLoading.value = true;
+
+      // Warm the proxied API (Render may be asleep behind Vercel)
+      await _warmApi();
+
       final response = await ApiService.post(ApiConstants.login, {
         'email': email,
         'password': password,
@@ -91,9 +95,7 @@ class AuthController extends GetxController {
         return false;
       }
     } catch (e) {
-      AppNotification.error(
-        'Server-ga lama gaadhin.\nURL: ${ApiConfig.instance.origin}\nInternet hubi, 1 daqiiqo sug, mar kale isku day.\nHaddii URL ay tahay onrender.com: uninstall app, rakib APK-ga cusub.',
-      );
+      AppNotification.error(_connectionError(e));
       return false;
     } finally {
       isLoading.value = false;
@@ -103,6 +105,7 @@ class AuthController extends GetxController {
   Future<bool> register(String name, String email, String password, String phone, String district) async {
     try {
       isLoading.value = true;
+      await _warmApi();
       final response = await ApiService.post(ApiConstants.register, {
         'name': name,
         'email': email,
@@ -129,13 +132,30 @@ class AuthController extends GetxController {
         return false;
       }
     } catch (e) {
-      AppNotification.error(
-        'Server-ga lama gaadhin.\nURL: ${ApiConfig.instance.origin}\nInternet hubi, 1 daqiiqo sug, mar kale isku day.\nHaddii URL ay tahay onrender.com: uninstall app, rakib APK-ga cusub.',
-      );
+      AppNotification.error(_connectionError(e));
       return false;
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<void> _warmApi() async {
+    try {
+      await ApiService.get(ApiConstants.me);
+    } catch (_) {
+      // 401 / timeout while waking is fine — login request follows
+    }
+  }
+
+  String _connectionError(Object e) {
+    final raw = e.toString();
+    if (raw.contains('TimeoutException') || raw.contains('timed out')) {
+      return 'Connection timed out.\nURL: ${ApiConfig.instance.origin}\nThe server may be waking up — wait 1 minute and try again.';
+    }
+    if (raw.contains('SocketException') || raw.contains('Failed host lookup')) {
+      return 'Could not reach the server.\nURL: ${ApiConfig.instance.origin}\nCheck mobile data/Wi‑Fi and try again.';
+    }
+    return 'Could not connect to server.\nURL: ${ApiConfig.instance.origin}\nPlease try again.';
   }
 
   Future<bool> updateProfile(Map<String, dynamic> profileData) async {

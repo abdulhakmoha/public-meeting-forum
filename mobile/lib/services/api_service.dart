@@ -62,7 +62,7 @@ class ApiService {
           headers: headers,
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 120));
     return _maybeLogoutOn401(endpoint, response);
   }
 
@@ -73,7 +73,7 @@ class ApiService {
           Uri.parse('${ApiConstants.baseUrl}$endpoint'),
           headers: headers,
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 120));
     return _maybeLogoutOn401(endpoint, response);
   }
 
@@ -85,7 +85,7 @@ class ApiService {
           headers: headers,
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 120));
     return _maybeLogoutOn401(endpoint, response);
   }
 
