@@ -16,10 +16,18 @@ export default function ForgotPassword() {
     setSuccess('');
     setIsSubmitting(true);
     try {
-      const { data } = await api.post('/auth/forgot-password', { email: email.trim() });
+      const { data } = await api.post(
+        '/auth/forgot-password',
+        { email: email.trim() },
+        { timeout: 30000 }
+      );
       setSuccess(data.message || 'Check your email for a reset link.');
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not send reset email. Try again.');
+      const msg =
+        err.code === 'ECONNABORTED'
+          ? 'Request timed out. The server may be waking up — wait 1 minute and try again.'
+          : err.response?.data?.message || 'Could not send reset email. Try again.';
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

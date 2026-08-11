@@ -109,12 +109,10 @@ exports.forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Please provide your email address' });
     }
 
-    const user = await User.findOne({ email });
-
-    // Always respond the same way (do not reveal whether the email exists)
     const okMessage =
-      'If an account exists for that email, a password reset link has been sent.';
+      'If an account exists for that email, a password reset link has been sent. Check inbox and Spam.';
 
+    const user = await User.findOne({ email });
     if (!user) {
       return res.json({ message: okMessage });
     }
@@ -127,32 +125,32 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'https://public-meeting-forum.vercel.app').replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: 'PMCFMS Password Reset',
-        message: `You requested a password reset. Open this link within 1 hour:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-        html: `
-          <p>You requested a password reset for your PMCFMS account.</p>
-          <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#0D9488;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a></p>
-          <p>Or copy this link: <br/><a href="${resetUrl}">${resetUrl}</a></p>
-          <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
-        `,
-      });
-    } catch (mailErr) {
-      console.error('Forgot password email failed:', mailErr);
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-      return res.status(500).json({
-        message: 'Email could not be sent. Please try again later or contact support.',
-      });
-    }
-
+    // Respond immediately — do not wait for SMTP (avoids "Sending..." hang / Network Error)
     res.json({ message: okMessage });
+
+    setImmediate(async () => {
+      try {
+        await sendEmail({
+          email: user.email,
+          subject: 'PMCFMS Password Reset',
+          message: `You requested a password reset. Open this link within 1 hour:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+          html: `
+            <p>You requested a password reset for your PMCFMS account.</p>
+            <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#0D9488;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a></p>
+            <p>Or copy this link: <br/><a href="${resetUrl}">${resetUrl}</a></p>
+            <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+          `,
+        });
+        console.log(`Forgot-password email queued/sent to ${user.email}`);
+      } catch (mailErr) {
+        console.error('Forgot password email failed:', mailErr.message || mailErr);
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error during password reset request' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Server error during password reset request' });
+    }
   }
 };
 

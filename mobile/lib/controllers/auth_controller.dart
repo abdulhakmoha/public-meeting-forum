@@ -92,7 +92,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       AppNotification.error(
-        'Could not connect to server (${ApiConfig.instance.origin}). Check USB + adb reverse, or set API Server in Settings.',
+        'Could not connect to server (${ApiConfig.instance.origin}). Check internet/VPN, wait ~1 min if the server is waking up, then try again.',
       );
       return false;
     } finally {
@@ -130,7 +130,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       AppNotification.error(
-        'Could not connect to server (${ApiConfig.instance.origin}). Check USB + adb reverse, or set API Server in Settings.',
+        'Could not connect to server (${ApiConfig.instance.origin}). Check internet/VPN, wait ~1 min if the server is waking up, then try again.',
       );
       return false;
     } finally {
