@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Set static folder + ensure uploads dir exists (Render disk)
+// Set static folder + ensure uploads dir exists (legacy local files only)
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
 const fs = require('fs');
 if (!fs.existsSync(uploadsDir)) {
@@ -49,9 +49,46 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Persistent media from MongoDB GridFS (and fallback to local disk for old files)
+const { isObjectIdString, openDownloadById } = require('./utils/mediaStore');
+app.get('/uploads/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isObjectIdString(id)) {
+      const found = await openDownloadById(id);
+      if (!found) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+      const { file, stream } = found;
+      if (file.contentType) res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      if (file.filename) {
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
+      }
+      stream.on('error', () => {
+        if (!res.headersSent) res.status(404).end();
+      });
+      return stream.pipe(res);
+    }
+
+    // Legacy disk filename (pre-GridFS) — may be gone after Render redeploy
+    const safe = path.basename(id);
+    const diskPath = path.join(uploadsDir, safe);
+    if (fs.existsSync(diskPath)) {
+      return res.sendFile(diskPath);
+    }
+    return res.status(404).json({
+      message: 'File not found. Older uploads may have been lost on server restart; re-upload the file.',
+    });
+  } catch (err) {
+    console.error('Media serve error:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Could not serve file' });
+  }
+});
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('✅ MongoDB Connected'))
+.then(() => console.log('✅ MongoDB Connected (uploads stored in GridFS — persistent)'))
 .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // Routes

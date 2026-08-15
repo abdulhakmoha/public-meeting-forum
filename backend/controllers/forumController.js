@@ -55,9 +55,12 @@ exports.getForum = async (req, res) => {
 exports.createForum = async (req, res) => {
   try {
     const isStaff = req.user.role === 'admin' || req.user.role === 'moderator';
-    const images = req.files
-      ? req.files.map((file) => `/uploads/${file.filename}`)
-      : [];
+    const { saveMany } = require('../utils/mediaStore');
+    let images = [];
+    if (req.files && req.files.length) {
+      const saved = await saveMany(req.files);
+      images = saved.map((s) => s.fileUrl);
+    }
 
     // Whitelist fields — never trust client isApproved / author / votes
     const forum = await Forum.create({

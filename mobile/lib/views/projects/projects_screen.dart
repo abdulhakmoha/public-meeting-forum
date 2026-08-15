@@ -15,6 +15,7 @@ import '../../utils/file_kind.dart';
 import '../../utils/project_draft_store.dart';
 import '../../utils/forum_draft_store.dart';
 import '../../utils/theme.dart';
+import '../../utils/status_workflow.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final bool openCreateOnStart;
@@ -850,28 +851,42 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: status,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFF1F5F9),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
-                        items: const [
-                          DropdownMenuItem(value: 'Planning', child: Text('Planning')),
-                          DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
-                          DropdownMenuItem(value: 'Completed', child: Text('Completed')),
-                        ],
-                        onChanged: (v) {
-                          setDialogState(() => status = v ?? 'Planning');
-                          persistDraft();
-                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'AUDIT STATUS',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.7,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              StatusWorkflow.projectFlow.join(' → '),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0F766E),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Starts at Planning — advances in order automatically.',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -887,7 +902,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                             const Icon(Icons.auto_graph, size: 16, color: Color(0xFF3B82F6)),
                             const SizedBox(width: 8),
                             Text(
-                              'Auto Progress: ${status == 'Completed' ? 100 : status == 'In Progress' ? 50 : 0}%',
+                              'Auto Progress: ${StatusWorkflow.autoProgress('Planning')}%',
                               style: const TextStyle(
                                 color: Color(0xFF1D4ED8),
                                 fontSize: 13,
@@ -1105,7 +1120,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                             ? num.tryParse(budgetCtrl.text)
                                             : null,
                                         'location': locationCtrl.text.trim(),
-                                        'status': status,
+                                        'status': 'Planning',
                                         if (finalUrl != null) 'imageUrl': finalUrl,
                                       });
                                       if (success) {
@@ -1331,58 +1346,75 @@ class _DetailsSheet extends StatelessWidget {
                       child: Text('No completed files uploaded yet.', style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic)),
                     ),
 
-                  // Upload buttons
+                  // Upload buttons — audit order only
                   if (canCreate) ...[
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        if ((project['status'] ?? '').toLowerCase() != 'completed')
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => onUploadFile('In Progress'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    Builder(
+                      builder: (_) {
+                        final st = (project['status'] ?? 'Planning').toString();
+                        final showInProgress = st == 'Planning' || st == 'In Progress';
+                        final showCompleted = st == 'In Progress';
+                        if (st == 'Completed') {
+                          return const Text(
+                            'Audit complete — project is Completed.',
+                            style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic),
+                          );
+                        }
+                        return Row(
+                          children: [
+                            if (showInProgress)
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => onUploadFile('In Progress'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.upload_file, size: 16, color: Colors.orange.shade600),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          st == 'Planning' ? '→ In Progress' : 'Add Progress',
+                                          style: TextStyle(color: Colors.orange.shade600, fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.upload_file, size: 16, color: Colors.orange.shade600),
-                                    const SizedBox(width: 6),
-                                    Text('Add Progress', style: TextStyle(color: Colors.orange.shade600, fontSize: 12, fontWeight: FontWeight.bold)),
-                                  ],
+                              ),
+                            if (showInProgress && showCompleted) const SizedBox(width: 12),
+                            if (showCompleted)
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => onUploadFile('Completed'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.green.withOpacity(0.2)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.upload_file, size: 16, color: Colors.green.shade600),
+                                        const SizedBox(width: 6),
+                                        Text('→ Completed', style: TextStyle(color: Colors.green.shade600, fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        if ((project['status'] ?? '').toLowerCase() != 'completed') const SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => onUploadFile('Completed'),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.green.withOpacity(0.2)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.upload_file, size: 16, color: Colors.green.shade600),
-                                  const SizedBox(width: 6),
-                                  Text('Add Complete', style: TextStyle(color: Colors.green.shade600, fontSize: 12, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                          ],
+                        );
+                      },
                     ),
                   ],
 

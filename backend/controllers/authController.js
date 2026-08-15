@@ -4,6 +4,21 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
 
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const findUserByEmail = async (email, extraSelect = '') => {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  // Exact match on normalized form, then case-insensitive for legacy mixed-case emails
+  let q = User.findOne({ email: normalized });
+  if (extraSelect) q = q.select(extraSelect);
+  let user = await q;
+  if (user) return user;
+  q = User.findOne({ email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+  if (extraSelect) q = q.select(extraSelect);
+  return q;
+};
+
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -16,13 +31,17 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { name, email, phone, district, password } = req.body;
+    const { name, phone, district, password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     if (!password || String(password).length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
+    if (!email) {
+      return res.status(400).json({ message: 'Please provide an email address' });
+    }
 
-    const userExists = await User.findOne({ email });
+    const userExists = await findUserByEmail(email);
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -66,16 +85,21 @@ exports.register = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
-    // Check for user email
-    const user = await User.findOne({ email }).select('+password');
-    
+    const user = await findUserByEmail(email, '+password');
+
     if (!user) {
       return res.status(401).json({ message: 'Login failed: Incorrect email or password.' });
     }
 
-    // Check password
+    // Normalize legacy mixed-case emails on successful login
+    if (user.email !== email) {
+      user.email = email;
+      await user.save({ validateBeforeSave: false });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
@@ -104,7 +128,7 @@ exports.login = async (req, res) => {
 // @access  Public
 exports.forgotPassword = async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
+    const email = normalizeEmail(req.body.email);
     if (!email) {
       return res.status(400).json({ message: 'Please provide your email address' });
     }
@@ -112,9 +136,15 @@ exports.forgotPassword = async (req, res) => {
     const okMessage =
       'If an account exists for that email, a password reset link has been sent. Check inbox and Spam.';
 
-    const user = await User.findOne({ email });
+    const user = await findUserByEmail(email);
     if (!user) {
+      // Same response timing/shape — do not reveal whether email exists
       return res.json({ message: okMessage });
+    }
+
+    // Keep stored email lowercase going forward
+    if (user.email !== email) {
+      user.email = email;
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -125,27 +155,42 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'https://public-meeting-forum.vercel.app').replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-    // Respond immediately — do not wait for SMTP (avoids "Sending..." hang / Network Error)
-    res.json({ message: okMessage });
+    const smtpReady = !!(process.env.SMTP_HOST && process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD);
+    if (!smtpReady) {
+      console.error('Forgot-password blocked: SMTP_HOST / SMTP_EMAIL / SMTP_PASSWORD not set on server');
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      return res.status(503).json({
+        message:
+          'Email service is not configured on the server. Ask an admin to set SMTP_HOST, SMTP_EMAIL, and SMTP_PASSWORD (Gmail App Password).',
+      });
+    }
 
-    setImmediate(async () => {
-      try {
-        await sendEmail({
-          email: user.email,
-          subject: 'PMCFMS Password Reset',
-          message: `You requested a password reset. Open this link within 1 hour:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-          html: `
-            <p>You requested a password reset for your PMCFMS account.</p>
-            <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#0D9488;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a></p>
-            <p>Or copy this link: <br/><a href="${resetUrl}">${resetUrl}</a></p>
-            <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
-          `,
-        });
-        console.log(`Forgot-password email queued/sent to ${user.email}`);
-      } catch (mailErr) {
-        console.error('Forgot password email failed:', mailErr.message || mailErr);
-      }
-    });
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'PMCFMS Password Reset',
+        message: `You requested a password reset. Open this link within 1 hour:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+        html: `
+          <p>You requested a password reset for your PMCFMS account.</p>
+          <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#0D9488;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a></p>
+          <p>Or copy this link: <br/><a href="${resetUrl}">${resetUrl}</a></p>
+          <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+        `,
+      });
+      console.log(`Forgot-password email sent to ${user.email}`);
+      return res.json({ message: okMessage });
+    } catch (mailErr) {
+      console.error('Forgot password email failed:', mailErr.message || mailErr);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      return res.status(502).json({
+        message:
+          'Could not send the reset email. Check SMTP settings (Gmail needs an App Password) and try again.',
+      });
+    }
   } catch (error) {
     console.error(error);
     if (!res.headersSent) {
@@ -178,6 +223,8 @@ exports.resetPassword = async (req, res) => {
     user.password = await bcrypt.hash(String(password), salt);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
+    // Ensure email stays normalized
+    user.email = normalizeEmail(user.email);
     await user.save();
 
     res.json({ message: 'Password updated successfully. You can sign in now.' });

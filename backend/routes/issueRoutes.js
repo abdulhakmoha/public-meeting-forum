@@ -5,6 +5,7 @@ const {
   getMyIssues,
   createIssue,
   updateIssueStatus,
+  editIssue,
   deleteIssue,
   addIssueComment
 } = require('../controllers/issueController');
@@ -24,6 +25,7 @@ router.route('/:id/comments')
   .post(protect, addIssueComment);
 
 router.route('/:id')
+  .put(protect, authorize('admin', 'moderator'), editIssue)
   .delete(protect, authorize('admin', 'moderator'), deleteIssue);
 
 module.exports = router;

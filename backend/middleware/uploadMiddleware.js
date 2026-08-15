@@ -51,15 +51,8 @@ function resolveExt(file) {
   return '';
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '..', 'public', 'uploads'));
-  },
-  filename: function (req, file, cb) {
-    const ext = resolveExt(file);
-    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
-  }
-});
+// Memory storage → MongoDB GridFS (persistent). Local disk on Render is wiped on redeploy.
+const storage = multer.memoryStorage();
 
 function fileFilter(req, file, cb) {
   const ext = resolveExt(file);
@@ -67,7 +60,6 @@ function fileFilter(req, file, cb) {
   if (ext && mimeOk) {
     return cb(null, true);
   }
-  // PDF sometimes arrives with odd mime — still allow if extension is .pdf
   if (ext === '.pdf') {
     return cb(null, true);
   }

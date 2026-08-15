@@ -91,6 +91,36 @@ exports.createAnnouncement = async (req, res) => {
   }
 };
 
+// @desc    Update announcement
+// @route   PUT /api/announcements/:id
+// @access  Private (Admin/Moderator)
+exports.updateAnnouncement = async (req, res) => {
+  try {
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) {
+      return res.status(404).json({ success: false, message: 'Announcement not found' });
+    }
+
+    const { title, content, category, date } = req.body;
+    if (title !== undefined) announcement.title = title;
+    if (content !== undefined) announcement.content = content;
+    if (category !== undefined) announcement.category = category;
+    if (date !== undefined) {
+      const chosen = new Date(date);
+      if (Number.isNaN(chosen.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid date' });
+      }
+      announcement.date = chosen;
+    }
+
+    await announcement.save();
+    const populated = await Announcement.findById(announcement._id).populate('creator', 'name role');
+    res.status(200).json({ success: true, data: populated });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Delete announcement
 // @route   DELETE /api/announcements/:id
 // @access  Private (Admin/Moderator)

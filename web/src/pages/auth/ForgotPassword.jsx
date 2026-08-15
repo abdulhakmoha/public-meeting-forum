@@ -18,8 +18,8 @@ export default function ForgotPassword() {
     try {
       const { data } = await api.post(
         '/auth/forgot-password',
-        { email: email.trim() },
-        { timeout: 30000 }
+        { email: email.trim().toLowerCase() },
+        { timeout: 45000 }
       );
       setSuccess(data.message || 'Check your email for a reset link.');
     } catch (err) {
@@ -28,6 +28,7 @@ export default function ForgotPassword() {
           ? 'Request timed out. The server may be waking up — wait 1 minute and try again.'
           : err.response?.data?.message || 'Could not send reset email. Try again.';
       setError(msg);
+      // Allow retry after SMTP / config errors
     } finally {
       setIsSubmitting(false);
     }

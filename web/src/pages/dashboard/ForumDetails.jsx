@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, MessageSquare, Clock, Send, ArrowBigUp, ArrowBigDown, FileText, Download, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Clock, Send, ArrowBigUp, ArrowBigDown, FileText, Download, Image as ImageIcon, Trash2 } from 'lucide-react';
 import api from '../../services/api';
 import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
+import { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 const D = {
   bg:       'var(--color-bg-elevated)',
@@ -18,12 +19,15 @@ const D = {
 
 export default function ForumDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const [forum, setForum] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const canModerate = user?.role === 'admin' || user?.role === 'moderator';
 
   useEffect(() => { fetchForumDetails(); }, [id]);
 
@@ -63,6 +67,17 @@ export default function ForumDetails() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!forum) return;
+    if (!confirmDeleteWithCreator('forum topic', forum.author)) return;
+    try {
+      await api.delete(`/forums/${id}`);
+      navigate('/dashboard/forums');
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to delete forum');
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center py-24">
       <div style={{ borderTopColor: D.primary }} className="w-8 h-8 border-2 border-transparent rounded-full animate-spin" />
@@ -84,14 +99,25 @@ export default function ForumDetails() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-24">
 
-      {/* Back */}
-      <Link
-        to="/dashboard/forums"
-        style={{ color: D.muted }}
-        className="inline-flex items-center text-sm font-bold hover:text-[var(--color-primary)] transition-colors"
-      >
-        <ArrowLeft size={16} className="mr-2" /> Back to Forums
-      </Link>
+      {/* Back + delete */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Link
+          to="/dashboard/forums"
+          style={{ color: D.muted }}
+          className="inline-flex items-center text-sm font-bold hover:text-[var(--color-primary)] transition-colors"
+        >
+          <ArrowLeft size={16} className="mr-2" /> Back to Forums
+        </Link>
+        {canModerate && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-colors"
+          >
+            <Trash2 size={14} /> Delete topic
+          </button>
+        )}
+      </div>
 
       {/* Original Post card */}
       <div

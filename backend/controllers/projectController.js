@@ -1,4 +1,8 @@
 const Project = require('../models/Project');
+const {
+  resolveProjectTransition,
+  progressForProjectStatus
+} = require('../utils/statusWorkflow');
 
 // @desc    Get all projects
 // @route   GET /api/projects
@@ -38,19 +42,15 @@ exports.getProject = async (req, res) => {
 // @access  Private (Admin/Moderator)
 exports.createProject = async (req, res) => {
   try {
-    const { title, description, status, budget, location, imageUrl } = req.body;
+    const { title, description, budget, location, imageUrl } = req.body;
 
-    const projectStatus = status || 'Planning';
-    let progress = 0;
-    if (projectStatus === 'In Progress') progress = 50;
-    if (projectStatus === 'Completed') progress = 100;
-
+    // Audit: new projects always start at Planning (no status skip on create)
     const project = await Project.create({
       title,
       description,
-      status: projectStatus,
+      status: 'Planning',
       budget,
-      progress,
+      progress: 0,
       location,
       imageUrl: imageUrl || '',
       creator: req.user._id
@@ -75,13 +75,21 @@ exports.updateProject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    if (req.body.status) {
-      if (req.body.status === 'Planning') req.body.progress = 0;
-      if (req.body.status === 'In Progress') req.body.progress = 50;
-      if (req.body.status === 'Completed') req.body.progress = 100;
+    const body = { ...req.body };
+
+    if (body.status || body.action === 'advance') {
+      const requested = body.action === 'advance' || body.status === 'advance'
+        ? 'advance'
+        : body.status;
+      const transition = resolveProjectTransition(project.status, requested);
+      if (!transition.ok) {
+        return res.status(400).json({ success: false, message: transition.message });
+      }
+      body.status = transition.next;
+      body.progress = progressForProjectStatus(transition.next);
     }
 
-    project = await Project.findByIdAndUpdate(req.params.id, req.body, {
+    project = await Project.findByIdAndUpdate(req.params.id, body, {
       new: true,
       runValidators: true
     }).populate('creator', 'name role');
@@ -156,27 +164,47 @@ exports.addProjectPhoto = async (req, res) => {
     }
 
     const { url, status } = req.body;
-    console.log('[addProjectPhoto] url:', url, 'status:', status);
     if (!url) {
       return res.status(400).json({ success: false, message: 'Photo URL is required' });
     }
 
-    const imageData = { url };
-    if (status) {
-      imageData.status = status;
-      if (status === 'In Progress') {
-        project.status = 'In Progress';
-        project.progress = 50;
-      } else if (status === 'Completed') {
-        project.status = 'Completed';
-        project.progress = 100;
+    const photoStatus = status || 'In Progress';
+
+    // Audit: photo stage must match current or next status only
+    if (photoStatus === 'In Progress') {
+      if (project.status === 'Completed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot add In Progress files to a Completed project'
+        });
+      }
+      if (project.status === 'Planning') {
+        const transition = resolveProjectTransition(project.status, 'In Progress');
+        if (!transition.ok) {
+          return res.status(400).json({ success: false, message: transition.message });
+        }
+        project.status = transition.next;
+        project.progress = progressForProjectStatus(transition.next);
+      }
+    } else if (photoStatus === 'Completed') {
+      if (project.status === 'Planning') {
+        return res.status(400).json({
+          success: false,
+          message: 'Audit order: move to In Progress before Completed'
+        });
+      }
+      if (project.status === 'In Progress') {
+        const transition = resolveProjectTransition(project.status, 'Completed');
+        if (!transition.ok) {
+          return res.status(400).json({ success: false, message: transition.message });
+        }
+        project.status = transition.next;
+        project.progress = progressForProjectStatus(transition.next);
       }
     }
 
-    console.log('[addProjectPhoto] imageData:', imageData);
-    project.progressImages.push(imageData);
+    project.progressImages.push({ url, status: photoStatus });
     await project.save();
-    console.log('[addProjectPhoto] saved progressImages:', project.progressImages.map(p => ({ url: p.url, status: p.status })));
 
     const populated = await Project.findById(project._id)
       .populate('creator', 'name role')

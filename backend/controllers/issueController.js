@@ -53,26 +53,62 @@ exports.createIssue = async (req, res) => {
   }
 };
 
-// @desc    Update issue status (Admin/Moderator only)
+// @desc    Update issue status (Admin/Moderator only) — audit order only
 // @route   PUT /api/issues/:id/status
 // @access  Private (Admin/Moderator)
 exports.updateIssueStatus = async (req, res) => {
   try {
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, action } = req.body;
+    const { resolveIssueTransition } = require('../utils/statusWorkflow');
     let issue = await Issue.findById(req.params.id);
 
     if (!issue) {
       return res.status(404).json({ success: false, message: 'Issue not found' });
     }
 
-    if (issue.status === 'Resolved' || issue.status === 'Rejected') {
-      return res.status(400).json({ success: false, message: 'Cannot modify status of a resolved or rejected issue' });
+    const requested =
+      action === 'reject' || status === 'Rejected'
+        ? 'Rejected'
+        : action === 'advance' || status === 'advance'
+          ? 'advance'
+          : status;
+
+    const transition = resolveIssueTransition(issue.status, requested);
+    if (!transition.ok) {
+      return res.status(400).json({ success: false, message: transition.message });
     }
 
-    issue.status = status || issue.status;
+    issue.status = transition.next;
     if (adminNotes !== undefined) {
       issue.adminNotes = adminNotes;
     }
+
+    await issue.save();
+    const populated = await Issue.findById(issue._id)
+      .populate('citizen', 'name role')
+      .populate('comments.author', 'name role');
+
+    res.status(200).json({ success: true, data: populated });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Edit issue content (Admin/Moderator)
+// @route   PUT /api/issues/:id
+// @access  Private (Admin/Moderator)
+exports.editIssue = async (req, res) => {
+  try {
+    const issue = await Issue.findById(req.params.id);
+    if (!issue) {
+      return res.status(404).json({ success: false, message: 'Issue not found' });
+    }
+
+    const { title, description, district, imageUrl } = req.body;
+    if (title !== undefined) issue.title = title;
+    if (description !== undefined) issue.description = description;
+    if (district !== undefined) issue.district = district;
+    if (imageUrl !== undefined) issue.imageUrl = imageUrl;
 
     await issue.save();
     const populated = await Issue.findById(issue._id)

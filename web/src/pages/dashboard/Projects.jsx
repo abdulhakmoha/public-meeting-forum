@@ -6,6 +6,9 @@ import { mediaUrl } from '../../services/mediaUrl';
 import { fileKind } from '../../utils/fileKind';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import StatusAudit from '../../components/StatusAudit';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
+import { PROJECT_FLOW, nextProjectStatus, autoProgress } from '../../utils/statusWorkflow';
 
 export default function Projects() {
   const { user } = useContext(AuthContext);
@@ -20,14 +23,8 @@ export default function Projects() {
   const [fileViewer, setFileViewer] = useState({ open: false, url: '', title: '' });
 
   const [newProject, setNewProject] = useState({
-    title: '', description: '', status: 'Planning', budget: '', location: '', imageUrl: '', imageMime: '', imageName: ''
+    title: '', description: '', budget: '', location: '', imageUrl: '', imageMime: '', imageName: ''
   });
-
-  const autoProgress = (status) => {
-    if (status === 'In Progress') return 50;
-    if (status === 'Completed') return 100;
-    return 0;
-  };
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
 
@@ -141,7 +138,6 @@ export default function Projects() {
       const payload = {
         title: newProject.title,
         description: newProject.description,
-        status: newProject.status,
         budget: newProject.budget,
         location: newProject.location,
         imageUrl: newProject.imageUrl || '',
@@ -149,17 +145,17 @@ export default function Projects() {
       const res = await api.post('/projects', payload);
       setProjects(prev => [res.data.data, ...prev]);
       setIsModalOpen(false);
-      setNewProject({ title: '', description: '', status: 'Planning', budget: '', location: '', imageUrl: '', imageMime: '', imageName: '' });
+      setNewProject({ title: '', description: '', budget: '', location: '', imageUrl: '', imageMime: '', imageName: '' });
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = async (id, e) => {
+  const handleDelete = async (proj, e) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this project?')) return;
+    if (!confirmDeleteWithCreator('project', proj.creator)) return;
     try {
-      await api.delete(`/projects/${id}`);
-      setProjects(prev => prev.filter(p => p._id !== id));
-      if (selectedProject?._id === id) { setIsDetailsOpen(false); setSelectedProject(null); }
+      await api.delete(`/projects/${proj._id}`);
+      setProjects(prev => prev.filter(p => p._id !== proj._id));
+      if (selectedProject?._id === proj._id) { setIsDetailsOpen(false); setSelectedProject(null); }
     } catch (err) { console.error(err); }
   };
 
@@ -177,6 +173,19 @@ export default function Projects() {
   const handleAddPhoto = async (e, targetStatus) => {
     const file = e.target.files[0];
     if (!file || !selectedProject) return;
+
+    const current = selectedProject.status;
+    if (targetStatus === 'Completed' && current === 'Planning') {
+      alert('Audit order: advance to In Progress before Completed.');
+      e.target.value = '';
+      return;
+    }
+    if (targetStatus === 'In Progress' && current === 'Completed') {
+      alert('Completed projects cannot go back to In Progress.');
+      e.target.value = '';
+      return;
+    }
+
     setPhotoUploading(true);
     try {
       const formData = new FormData();
@@ -335,7 +344,7 @@ export default function Projects() {
                       </span>
                       {canManage && (
                         <button
-                          onClick={(e) => handleDelete(proj._id, e)}
+                          onClick={(e) => handleDelete(proj, e)}
                           className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 size={14} />
@@ -388,8 +397,9 @@ export default function Projects() {
                       </div>
                     )}
 
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                       <span className="flex items-center gap-1"><MapPin size={12} className="text-teal-500" /> {proj.location}</span>
+                      <CreatorBadge name={proj.creator?.name} role={proj.creator?.role} label="Created by" />
                       <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                         <DollarSign size={11} className="text-emerald-500" /> {proj.budget?.toLocaleString()}
                       </span>
@@ -443,7 +453,7 @@ export default function Projects() {
 
                 <div>
                   <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{selectedProject.title}</h2>
-                  <div className="flex flex-wrap items-center gap-3 text-xs mb-4">
+                  <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
                     <span className={`px-2.5 py-1 rounded-full font-bold ${getStatusStyle(selectedProject.status).badge}`}>
                       {getStatusStyle(selectedProject.status).label}
                     </span>
@@ -451,6 +461,16 @@ export default function Projects() {
                     <span className="font-bold text-slate-600 dark:text-slate-300 flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                       <DollarSign size={11} className="text-emerald-500" /> {selectedProject.budget?.toLocaleString()}
                     </span>
+                    <CreatorBadge name={selectedProject.creator?.name} role={selectedProject.creator?.role} label="Created by" />
+                  </div>
+                  <div className="mb-4 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Audit trail</p>
+                    <StatusAudit steps={PROJECT_FLOW} current={selectedProject.status} />
+                    {nextProjectStatus(selectedProject.status) && (
+                      <p className="mt-2 text-xs text-teal-600 dark:text-teal-400 font-medium">
+                        Next: → {nextProjectStatus(selectedProject.status)} (upload that stage to advance)
+                      </p>
+                    )}
                   </div>
                   <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
                 </div>
@@ -567,25 +587,29 @@ export default function Projects() {
                       )}
                     </div>
 
-                    {/* Upload Buttons */}
-                    {canManage && (
+                    {/* Upload Buttons — audit: only current/next stage */}
+                    {canManage && selectedProject.status !== 'Completed' && (
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <label className="flex items-center gap-2 cursor-pointer px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 rounded-xl text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors w-fit">
-                          {photoUploading ? (
-                            <span className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> Uploading...</span>
-                          ) : (
-                            <span className="flex items-center gap-1.5"><Image size={14} /> Upload Progress Picture</span>
-                          )}
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleAddPhoto(e, 'In Progress')} disabled={photoUploading} />
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors w-fit">
-                          {photoUploading ? (
-                            <span className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> Uploading...</span>
-                          ) : (
-                            <span className="flex items-center gap-1.5"><Image size={14} /> Upload Complete Picture</span>
-                          )}
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleAddPhoto(e, 'Completed')} disabled={photoUploading} />
-                        </label>
+                        {(selectedProject.status === 'Planning' || selectedProject.status === 'In Progress') && (
+                          <label className="flex items-center gap-2 cursor-pointer px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 rounded-xl text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors w-fit">
+                            {photoUploading ? (
+                              <span className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> Uploading...</span>
+                            ) : (
+                              <span className="flex items-center gap-1.5"><Image size={14} /> {selectedProject.status === 'Planning' ? 'Advance → In Progress (upload)' : 'Upload Progress Picture'}</span>
+                            )}
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleAddPhoto(e, 'In Progress')} disabled={photoUploading} />
+                          </label>
+                        )}
+                        {selectedProject.status === 'In Progress' && (
+                          <label className="flex items-center gap-2 cursor-pointer px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors w-fit">
+                            {photoUploading ? (
+                              <span className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> Uploading...</span>
+                            ) : (
+                              <span className="flex items-center gap-1.5"><Image size={14} /> Advance → Completed (upload)</span>
+                            )}
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleAddPhoto(e, 'Completed')} disabled={photoUploading} />
+                          </label>
+                        )}
                       </div>
                     )}
                   </div>
@@ -681,19 +705,16 @@ export default function Projects() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Project Status</label>
-                    <select value={newProject.status}
-                      onChange={e => setNewProject({ ...newProject, status: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 focus:outline-none transition-all">
-                      <option value="Planning">Planning</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Audit Status</label>
+                    <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                      <StatusAudit steps={PROJECT_FLOW} current="Planning" />
+                      <p className="mt-2 text-[11px] text-slate-500">Starts at Planning — advances automatically in order.</p>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Auto Progress</label>
                     <div className="w-full px-4 py-2.5 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 text-sm font-bold">
-                      {autoProgress(newProject.status)}% (auto)
+                      {autoProgress('Planning')}% (auto)
                     </div>
                   </div>
                 </div>

@@ -1,15 +1,18 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Megaphone, Plus, Trash2, Calendar, Shield, X } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Calendar, X, Pencil } from 'lucide-react';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 export default function Announcements() {
   const { user } = useContext(AuthContext);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editAnn, setEditAnn] = useState(null);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', category: 'General', date: '' });
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
@@ -55,12 +58,42 @@ export default function Announcements() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this announcement?')) return;
+  const handleDelete = async (ann) => {
+    if (!confirmDeleteWithCreator('announcement', ann.creator)) return;
     try {
-      await api.delete(`/announcements/${id}`);
-      setAnnouncements(announcements.filter(a => a._id !== id));
+      await api.delete(`/announcements/${ann._id}`);
+      setAnnouncements(announcements.filter(a => a._id !== ann._id));
     } catch (err) { console.error(err); }
+  };
+
+  const openEditAnn = (ann) => {
+    setEditAnn({
+      _id: ann._id,
+      title: ann.title || '',
+      content: ann.content || '',
+      category: ann.category || 'General',
+      date: ann.date ? String(ann.date).slice(0, 10) : '',
+      creator: ann.creator
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditAnn = async (e) => {
+    e.preventDefault();
+    if (!editAnn?._id) return;
+    try {
+      const res = await api.put(`/announcements/${editAnn._id}`, {
+        title: editAnn.title,
+        content: editAnn.content,
+        category: editAnn.category,
+        ...(editAnn.date ? { date: editAnn.date } : {})
+      });
+      setAnnouncements(announcements.map(a => a._id === editAnn._id ? res.data.data : a));
+      setIsEditOpen(false);
+      setEditAnn(null);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update announcement');
+    }
   };
 
   const getCategoryStyle = (cat) => {
@@ -129,22 +162,28 @@ export default function Announcements() {
                       </span>
                     </div>
                       {canManage && (
-                        <button
-                          onClick={() => handleDelete(ann._id)}
-                          className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEditAnn(ann)}
+                            className="p-1.5 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-teal-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                            title="Edit"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(ann)}
+                            className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       )}
                   </div>
                   <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">{ann.title}</h3>
                   <p className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">{ann.content}</p>
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center gap-2 text-xs text-slate-400">
-                    <Shield size={12} className="text-teal-500" />
-                    Posted by: <span className="font-semibold text-slate-600 dark:text-slate-300">{ann.creator?.name}</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-medium capitalize">
-                      {ann.creator?.role}
-                    </span>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                    <CreatorBadge name={ann.creator?.name} role={ann.creator?.role} label="Posted by" />
                   </div>
                 </div>
               </motion.div>
@@ -215,6 +254,61 @@ export default function Announcements() {
                 <button type="submit"
                   className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg shadow-teal-500/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99]">
                   Publish Announcement
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditOpen && editAnn && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+            >
+              <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-cyan-500" />
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Pencil size={18} className="text-teal-500" /> Edit Announcement
+                </h3>
+                <button onClick={() => { setIsEditOpen(false); setEditAnn(null); }} className="text-slate-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleEditAnn} className="p-6 space-y-4">
+                <CreatorBadge name={editAnn.creator?.name} role={editAnn.creator?.role} label="Posted by" />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Title</label>
+                  <input required value={editAnn.title}
+                    onChange={e => setEditAnn({ ...editAnn, title: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category</label>
+                  <select value={editAnn.category}
+                    onChange={e => setEditAnn({ ...editAnn, category: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none">
+                    <option value="General">General</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="Urgent">Urgent</option>
+                    <option value="Infrastructure">Infrastructure</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Education">Education</option>
+                    <option value="Security">Security</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Content</label>
+                  <textarea required rows={5} value={editAnn.content}
+                    onChange={e => setEditAnn({ ...editAnn, content: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none resize-none" />
+                </div>
+                <button type="submit" className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-semibold rounded-xl text-sm">
+                  Save Changes
                 </button>
               </form>
             </motion.div>

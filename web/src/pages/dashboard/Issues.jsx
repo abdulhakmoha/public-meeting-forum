@@ -1,10 +1,13 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, AlertTriangle, Plus, Trash2, Calendar, MapPin, CheckCircle, Clock, X, Flag, ShieldCheck, MessageSquare, Send, Upload, Image } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Plus, Trash2, Calendar, MapPin, CheckCircle, Clock, X, ShieldCheck, MessageSquare, Send, Upload, Image, Pencil } from 'lucide-react';
 import api from '../../services/api';
 import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import StatusAudit from '../../components/StatusAudit';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
+import { ISSUE_FLOW, nextIssueStatus, canRejectIssue } from '../../utils/statusWorkflow';
 
 export default function Issues() {
   const { user } = useContext(AuthContext);
@@ -12,10 +15,12 @@ export default function Issues() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdateOpen, setIsUpdateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [selectedIssue, setSelectedIssue] = useState(null);
-  const [updateData, setUpdateData] = useState({ status: 'Under Review', adminNotes: '' });
+  const [updateData, setUpdateData] = useState({ adminNotes: '' });
+  const [editData, setEditData] = useState({ title: '', description: '', district: '', imageUrl: '' });
   const [imgUploading, setImgUploading] = useState(false);
 
   const [newIssue, setNewIssue] = useState({
@@ -69,25 +74,43 @@ export default function Issues() {
   const handleStatusUpdate = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!selectedIssue) return;
+    const next = nextIssueStatus(selectedIssue.status);
+    if (!next) {
+      alert('Issue is already at the final audit step.');
+      return;
+    }
     try {
-      const res = await api.put(`/issues/${selectedIssue._id}/status`, updateData);
+      const res = await api.put(`/issues/${selectedIssue._id}/status`, {
+        action: 'advance',
+        adminNotes: updateData.adminNotes
+      });
       setIssues(issues.map(i => i._id === selectedIssue._id ? res.data.data : i));
       setIsUpdateOpen(false);
       setSelectedIssue(null);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to advance status.');
+    }
   };
 
   const handleRejectIssue = async (issueId) => {
+    if (!canRejectIssue(selectedIssue?.status)) {
+      alert('Reject is only allowed from Pending or Under Review.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to reject this issue?')) return;
     try {
-      const res = await api.put(`/issues/${issueId}/status`, { status: 'Rejected', adminNotes: 'This issue was rejected by the moderation team.' });
+      const res = await api.put(`/issues/${issueId}/status`, {
+        action: 'reject',
+        adminNotes: updateData.adminNotes?.trim() || 'This issue was rejected by the moderation team.'
+      });
       setIssues(issues.map(i => i._id === issueId ? res.data.data : i));
       setIsUpdateOpen(false);
       setSelectedIssue(null);
       alert('Issue status changed to Rejected.');
     } catch (err) {
       console.error(err);
-      alert('Failed to update status.');
+      alert(err.response?.data?.message || 'Failed to update status.');
     }
   };
 
@@ -105,12 +128,37 @@ export default function Issues() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this issue?')) return;
+  const handleDelete = async (issue) => {
+    if (!confirmDeleteWithCreator('issue', issue.citizen)) return;
     try {
-      await api.delete(`/issues/${id}`);
-      setIssues(issues.filter(i => i._id !== id));
+      await api.delete(`/issues/${issue._id}`);
+      setIssues(issues.filter(i => i._id !== issue._id));
     } catch (err) { console.error(err); }
+  };
+
+  const openEdit = (issue) => {
+    setSelectedIssue(issue);
+    setEditData({
+      title: issue.title || '',
+      description: issue.description || '',
+      district: issue.district || '',
+      imageUrl: issue.imageUrl || ''
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSave = async (e) => {
+    e.preventDefault();
+    if (!selectedIssue) return;
+    try {
+      const res = await api.put(`/issues/${selectedIssue._id}`, editData);
+      setIssues(issues.map(i => i._id === selectedIssue._id ? res.data.data : i));
+      setSelectedIssue(res.data.data);
+      setIsEditOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to save edits.');
+    }
   };
 
   const getStatusStyle = (status) => {
@@ -215,7 +263,7 @@ export default function Issues() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedIssue(issue);
-                              setUpdateData({ status: issue.status, adminNotes: issue.adminNotes || '' });
+                              setUpdateData({ adminNotes: issue.adminNotes || '' });
                               setIsUpdateOpen(true);
                             }}
                             className="text-[11px] px-3.5 py-1.5 bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-bold rounded-xl shadow-md shadow-teal-500/20 hover:shadow-lg hover:shadow-teal-500/40 hover:scale-105 transition-all"
@@ -227,9 +275,22 @@ export default function Issues() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(issue._id);
+                              openEdit(issue);
+                            }}
+                            className="p-1.5 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-teal-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(issue);
                             }}
                             className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                            title="Delete"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -250,13 +311,14 @@ export default function Issues() {
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 flex justify-between text-[10px] text-slate-400">
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 flex flex-wrap justify-between gap-2 text-[10px] text-slate-400">
                     <span className="flex items-center gap-1"><MapPin size={10} className="text-teal-500" /> {issue.district}</span>
                     <span className="flex items-center gap-1"><Clock size={10} /> {new Date(issue.createdAt).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-1">
-                      <Flag size={9} />
-                      <span className="font-semibold text-slate-500">{issue.citizen?.name || 'Citizen'}</span>
-                    </span>
+                    <CreatorBadge
+                      name={issue.citizen?.name}
+                      role={issue.citizen?.role}
+                      label="Reported by"
+                    />
                   </div>
                 </div>
               </motion.div>
@@ -369,15 +431,17 @@ export default function Issues() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">New Status</label>
-                  <select value={updateData.status}
-                    onChange={e => setUpdateData({ ...updateData, status: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 focus:outline-none transition-all">
-                    <option value="Pending">Pending</option>
-                    <option value="Under Review">Under Review</option>
-                    <option value="Resolved">Resolved</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Audit Status</label>
+                  <StatusAudit
+                    steps={ISSUE_FLOW}
+                    current={selectedIssue.status}
+                    rejectedLabel="Rejected"
+                  />
+                  {nextIssueStatus(selectedIssue.status) && (
+                    <p className="mt-2 text-xs text-teal-600 dark:text-teal-400 font-medium">
+                      Next step: → {nextIssueStatus(selectedIssue.status)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -389,16 +453,79 @@ export default function Issues() {
                 </div>
 
                 <div className="flex gap-3">
-                  <button type="submit"
-                    className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99]">
-                    ✅ Save Response
-                  </button>
-                  <button type="button"
-                    onClick={() => handleRejectIssue(selectedIssue._id)}
-                    className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-600/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99]">
-                    ❌ Reject Issue
-                  </button>
+                  {nextIssueStatus(selectedIssue.status) ? (
+                    <button type="submit"
+                      className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99]">
+                      Advance to {nextIssueStatus(selectedIssue.status)}
+                    </button>
+                  ) : (
+                    <div className="flex-1 py-3 text-center text-sm font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                      Audit complete
+                    </div>
+                  )}
+                  {canRejectIssue(selectedIssue.status) && (
+                    <button type="button"
+                      onClick={() => handleRejectIssue(selectedIssue._id)}
+                      className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-600/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99]">
+                      Reject
+                    </button>
+                  )}
                 </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Issue Modal (Admin/Moderator) */}
+      <AnimatePresence>
+        {isEditOpen && selectedIssue && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+            >
+              <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-cyan-500" />
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Pencil size={18} className="text-teal-500" /> Edit Issue
+                </h3>
+                <button onClick={() => setIsEditOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleEditSave} className="p-6 space-y-4">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
+                  <CreatorBadge
+                    name={selectedIssue.citizen?.name}
+                    role={selectedIssue.citizen?.role}
+                    label="Originally reported by"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Title</label>
+                  <input required value={editData.title}
+                    onChange={e => setEditData({ ...editData, title: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">District</label>
+                  <input required value={editData.district}
+                    onChange={e => setEditData({ ...editData, district: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Description</label>
+                  <textarea required rows={4} value={editData.description}
+                    onChange={e => setEditData({ ...editData, description: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white text-sm focus:border-teal-500 focus:outline-none resize-none" />
+                </div>
+                <button type="submit"
+                  className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-teal-500/20">
+                  Save Changes
+                </button>
               </form>
             </motion.div>
           </div>
@@ -434,6 +561,20 @@ export default function Issues() {
                     </span>
                     <span className="text-slate-400 flex items-center gap-1"><MapPin size={12} /> {selectedIssue.district}</span>
                     <span className="text-slate-400 flex items-center gap-1"><Clock size={12} /> {new Date(selectedIssue.createdAt).toLocaleDateString()}</span>
+                    <CreatorBadge
+                      name={selectedIssue.citizen?.name}
+                      role={selectedIssue.citizen?.role}
+                      label="Reported by"
+                    />
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsDetailsOpen(false); openEdit(selectedIssue); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-300 font-semibold border border-teal-200 dark:border-teal-800"
+                      >
+                        <Pencil size={12} /> Edit
+                      </button>
+                    )}
                   </div>
                   <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedIssue.description}</p>
                   {selectedIssue.imageUrl && (
@@ -469,7 +610,11 @@ export default function Issues() {
                     {selectedIssue.comments?.map((comment) => (
                       <div key={comment._id} className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/60 rounded-2xl text-xs">
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="font-bold text-slate-700 dark:text-slate-300">{comment.authorName}</span>
+                          <CreatorBadge
+                            name={comment.author?.name || comment.authorName}
+                            role={comment.author?.role}
+                            label=""
+                          />
                           <span className="text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString()}</span>
                         </div>
                         <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{comment.text}</p>

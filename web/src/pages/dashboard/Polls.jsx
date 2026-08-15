@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 const D = {
   bg:      'var(--color-bg-elevated)',
@@ -58,10 +59,10 @@ export default function Polls() {
     }
   };
 
-  const handleDelete = async (pollId) => {
-    if (!window.confirm('Delete this poll?')) return;
+  const handleDelete = async (poll) => {
+    if (!confirmDeleteWithCreator('poll', poll.creator)) return;
     try {
-      await api.delete(`/polls/${pollId}`);
+      await api.delete(`/polls/${poll._id}`);
       fetchPolls();
     } catch { alert('Error deleting poll'); }
   };
@@ -211,6 +212,9 @@ export default function Polls() {
                         )}
                       </div>
                       <h3 style={{ color: D.text, fontWeight: 700, fontSize: '16px', lineHeight: 1.4 }}>{poll.question}</h3>
+                      <div className="mt-2">
+                        <CreatorBadge name={poll.creator?.name} role={poll.creator?.role} label="Created by" />
+                      </div>
                     </div>
 
                     {/* Admin controls */}
@@ -221,7 +225,7 @@ export default function Polls() {
                           title={poll.status === 'open' ? 'Close Poll' : 'Open Poll'}>
                           <CheckCircle size={15} />
                         </button>
-                        <button onClick={() => handleDelete(poll._id)}
+                        <button onClick={() => handleDelete(poll)}
                           style={{ padding: '7px', borderRadius: '9px', background: 'rgba(239,68,68,0.12)', color: '#EF4444', border: 'none', cursor: 'pointer' }}>
                           <Trash2 size={15} />
                         </button>

@@ -58,6 +58,7 @@ exports.getAllPolls = async (req, res) => {
   try {
     const polls = await Poll.find()
       .populate('meeting', 'title _id')
+      .populate('creator', 'name role')
       .sort('-createdAt');
     res.json({ success: true, data: polls });
   } catch (error) {

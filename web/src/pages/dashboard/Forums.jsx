@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Search, Plus, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { MessageSquare, Search, Plus, Filter, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 export default function Forums() {
   const { user } = useContext(AuthContext);
@@ -92,7 +93,19 @@ export default function Forums() {
         fetchForums();
       } catch (error) {
         console.error('Error rejecting forum:', error);
+        alert(error.response?.data?.message || 'Failed to delete forum');
       }
+    }
+  };
+
+  const handleDeleteForum = async (forum) => {
+    if (!confirmDeleteWithCreator('forum topic', forum.author)) return;
+    try {
+      await api.delete(`/forums/${forum._id}`);
+      fetchForums();
+    } catch (error) {
+      console.error('Error deleting forum:', error);
+      alert(error.response?.data?.message || 'Failed to delete forum');
     }
   };
 
@@ -257,13 +270,24 @@ export default function Forums() {
                     </button>
                   </>
                 ) : (
-                  <Link 
-                    to={`/dashboard/forums/${forum._id}`}
-                    style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
-                    className="w-full text-center px-4 py-2 rounded-lg font-bold text-sm transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                  >
-                    View Thread
-                  </Link>
+                  <div className="w-full flex flex-col gap-2">
+                    <Link 
+                      to={`/dashboard/forums/${forum._id}`}
+                      style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
+                      className="w-full text-center px-4 py-2 rounded-lg font-bold text-sm transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                    >
+                      View Thread
+                    </Link>
+                    {isModerator && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteForum(forum)}
+                        className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-lg font-bold text-sm transition-colors"
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </motion.div>

@@ -23,6 +23,14 @@ class _ForumsScreenState extends State<ForumsScreen> {
   bool get _isMod => authCtrl.user['role'] == 'admin' || authCtrl.user['role'] == 'moderator' || authCtrl.user['role'] == 'secretary';
 
   Future<void> _confirmDeleteForum(dynamic forum) async {
+    final author = forum['author'];
+    final name = author is Map ? (author['name'] ?? 'Unknown') : 'Unknown';
+    final role = author is Map ? (author['role'] ?? 'citizen').toString() : 'citizen';
+    final roleLabel = role == 'admin'
+        ? 'Admin'
+        : role == 'moderator'
+            ? 'Moderator'
+            : 'Citizen';
     final confirmed = await Get.dialog<bool>(
       AlertDialog(
         backgroundColor: AppTheme.surfaceColor,
@@ -31,7 +39,7 @@ class _ForumsScreenState extends State<ForumsScreen> {
           style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Delete "${forum['title'] ?? 'this topic'}"? This cannot be undone.',
+          'Delete "${forum['title'] ?? 'this topic'}"?\n\nCreated by: $name ($roleLabel)\n\nThis cannot be undone.',
           style: TextStyle(color: AppTheme.textMuted),
         ),
         actions: [

@@ -158,6 +158,30 @@ class AuthController extends GetxController {
     return 'Could not connect to server.\nURL: ${ApiConfig.instance.origin}\nPlease try again.';
   }
 
+  /// Returns `{ok: bool, message: String}`.
+  Future<Map<String, String>> forgotPassword(String email) async {
+    try {
+      isLoading.value = true;
+      await _warmApi();
+      final response = await ApiService.post(ApiConstants.forgotPassword, {
+        'email': email.trim().toLowerCase(),
+      });
+      final data = jsonDecode(response.body);
+      final message = data['message']?.toString() ??
+          (response.statusCode == 200
+              ? 'If an account exists, a reset link was sent. Check inbox and Spam.'
+              : 'Could not send reset email.');
+      return {
+        'ok': response.statusCode == 200 ? 'true' : 'false',
+        'message': message,
+      };
+    } catch (e) {
+      return {'ok': 'false', 'message': _connectionError(e)};
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   Future<bool> updateProfile(Map<String, dynamic> profileData) async {
     try {
       isLoading.value = true;

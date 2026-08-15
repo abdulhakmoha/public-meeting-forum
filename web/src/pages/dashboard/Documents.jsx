@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, Calendar, FileText, Download, X, File, UploadCloud, Eye, ExternalLink } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Calendar, FileText, Download, X, File, UploadCloud, Eye, ExternalLink, Pencil } from 'lucide-react';
 import api from '../../services/api';
 import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 export default function Documents() {
   const { user } = useContext(AuthContext);
@@ -17,6 +18,8 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [viewer, setViewer] = useState({ open: false, url: '', title: '' });
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editDoc, setEditDoc] = useState(null);
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
 
@@ -141,12 +144,40 @@ export default function Documents() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) return;
+  const handleDelete = async (doc) => {
+    if (!confirmDeleteWithCreator('document', doc.uploadedBy)) return;
     try {
-      await api.delete(`/documents/${id}`);
-      setDocuments(documents.filter(d => d._id !== id));
+      await api.delete(`/documents/${doc._id}`);
+      setDocuments(documents.filter(d => d._id !== doc._id));
     } catch (err) { console.error(err); }
+  };
+
+  const openEditDoc = (doc) => {
+    setEditDoc({
+      _id: doc._id,
+      title: doc.title || '',
+      description: doc.description || '',
+      category: doc.category || 'Other',
+      uploadedBy: doc.uploadedBy
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditDoc = async (e) => {
+    e.preventDefault();
+    if (!editDoc?._id) return;
+    try {
+      const res = await api.put(`/documents/${editDoc._id}`, {
+        title: editDoc.title,
+        description: editDoc.description,
+        category: editDoc.category
+      });
+      setDocuments(documents.map(d => d._id === editDoc._id ? res.data.data : d));
+      setIsEditOpen(false);
+      setEditDoc(null);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update document');
+    }
   };
 
   const getCategoryStyle = (cat) => {
@@ -206,10 +237,18 @@ export default function Documents() {
                         <FileText className={style.color} size={20} />
                       </div>
                         {canManage && (
-                          <button onClick={() => handleDelete(doc._id)}
-                            className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100">
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="flex gap-1">
+                            <button onClick={() => openEditDoc(doc)}
+                              className="p-1.5 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-teal-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                              title="Edit">
+                              <Pencil size={15} />
+                            </button>
+                            <button onClick={() => handleDelete(doc)}
+                              className="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl shadow-sm transition-all opacity-0 group-hover:opacity-100"
+                              title="Delete">
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         )}
                     </div>
                     <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold ${style.bg} ${style.color} border ${style.border}`}>
@@ -220,7 +259,9 @@ export default function Documents() {
                       <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed line-clamp-2">{doc.description}</p>
                     )}
                   </div>
-                  <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2">
+                  <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex flex-col gap-2">
+                    <CreatorBadge name={doc.uploadedBy?.name} role={doc.uploadedBy?.role} label="Uploaded by" />
+                    <div className="flex items-center justify-between gap-2">
                     <div className="text-[10px] text-slate-400 space-y-0.5 min-w-0">
                       <p className="flex items-center gap-1"><Calendar size={10} /> {new Date(doc.createdAt).toLocaleDateString()}</p>
                       <p>Size: <span className="font-medium text-slate-500">{doc.fileSize}</span></p>
@@ -240,6 +281,7 @@ export default function Documents() {
                       >
                         <Download size={12} /> Download
                       </button>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -365,6 +407,58 @@ export default function Documents() {
                 <button type="submit" disabled={uploading}
                   className="w-full py-3 bg-gradient-to-r from-emerald-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/20 text-sm transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
                   {uploading ? 'Saving & Uploading...' : 'Save Document'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditOpen && editDoc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+            >
+              <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-cyan-500" />
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Pencil size={18} className="text-teal-500" /> Edit Document
+                </h3>
+                <button onClick={() => { setIsEditOpen(false); setEditDoc(null); }} className="text-slate-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleEditDoc} className="p-6 space-y-4">
+                <CreatorBadge name={editDoc.uploadedBy?.name} role={editDoc.uploadedBy?.role} label="Uploaded by" />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Title</label>
+                  <input required value={editDoc.title}
+                    onChange={e => setEditDoc({ ...editDoc, title: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category</label>
+                  <select value={editDoc.category}
+                    onChange={e => setEditDoc({ ...editDoc, category: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none">
+                    <option value="Budget">Budget</option>
+                    <option value="Minutes">Minutes</option>
+                    <option value="Policy">Policy</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Description</label>
+                  <textarea rows={3} value={editDoc.description}
+                    onChange={e => setEditDoc({ ...editDoc, description: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:border-teal-500 focus:outline-none resize-none" />
+                </div>
+                <button type="submit" className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-semibold rounded-xl text-sm">
+                  Save Changes
                 </button>
               </form>
             </motion.div>

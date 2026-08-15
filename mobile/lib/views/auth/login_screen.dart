@@ -4,6 +4,7 @@ import '../../controllers/auth_controller.dart';
 import '../../utils/theme.dart';
 import '../../layouts/main_layout.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -126,6 +127,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => Get.to(() => const ForgotPasswordScreen()),
+                      child: const Text(
+                        'Forgot password?',
+                        style: TextStyle(
+                          color: AppTheme.primaryColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
 

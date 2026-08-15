@@ -59,9 +59,38 @@ class IssueController extends GetxController {
     }
   }
 
-  Future<bool> updateIssueStatus(String id, String status, {String? adminNotes}) async {
+  Future<bool> editIssue(String id, Map<String, dynamic> data) async {
     try {
-      final body = <String, dynamic>{'status': status};
+      final response = await ApiService.put('/issues/$id', data);
+      if (response.statusCode == 200) {
+        final updated = jsonDecode(response.body)['data'];
+        final idx = issues.indexWhere((i) => i['_id'] == id);
+        if (idx != -1) issues[idx] = updated;
+        return true;
+      }
+      try {
+        final err = jsonDecode(response.body);
+        AppNotification.error(err['message'] ?? 'Failed to edit issue');
+      } catch (_) {
+        AppNotification.error('Failed to edit issue');
+      }
+      return false;
+    } catch (e) {
+      AppNotification.error('Could not connect to server');
+      return false;
+    }
+  }
+
+  Future<bool> updateIssueStatus(
+    String id, {
+    String? status,
+    String? action,
+    String? adminNotes,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (action != null) body['action'] = action;
+      if (status != null) body['status'] = status;
       if (adminNotes != null && adminNotes.isNotEmpty) {
         body['adminNotes'] = adminNotes;
       }
@@ -72,7 +101,12 @@ class IssueController extends GetxController {
         if (idx != -1) issues[idx] = updated;
         return true;
       }
-      AppNotification.error('Failed to update issue');
+      try {
+        final err = jsonDecode(response.body);
+        AppNotification.error(err['message'] ?? 'Failed to update issue');
+      } catch (_) {
+        AppNotification.error('Failed to update issue');
+      }
       return false;
     } catch (e) {
       AppNotification.error('Could not connect to server');

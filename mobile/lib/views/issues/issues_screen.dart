@@ -13,6 +13,7 @@ import '../../utils/api_constants.dart';
 import '../../utils/app_notification.dart';
 import '../../utils/issue_draft_store.dart';
 import '../../utils/theme.dart';
+import '../../utils/status_workflow.dart';
 
 class IssuesScreen extends StatefulWidget {
   final bool openCreateOnStart;
@@ -249,10 +250,18 @@ class _IssuesScreenState extends State<IssuesScreen> {
                               ),
                             ),
                           if (_isAdmin)
+                            GestureDetector(
+                              onTap: () => _showEditIssue(issue),
+                              child: const Padding(
+                                padding: EdgeInsets.only(left: 6),
+                                child: Icon(Icons.edit_outlined, color: Color(0xFF0D9488), size: 16),
+                              ),
+                            ),
+                          if (_isAdmin)
                             Padding(
-                              padding: EdgeInsets.only(left: _isAdmin && status != 'Resolved' && status != 'Rejected' ? 0 : 0),
+                              padding: const EdgeInsets.only(left: 6),
                               child: GestureDetector(
-                                onTap: () => _confirmDelete(issue['_id']),
+                                onTap: () => _confirmDelete(issue),
                                 child: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 16),
                               ),
                             ),
@@ -313,7 +322,13 @@ class _IssuesScreenState extends State<IssuesScreen> {
                               SizedBox(width: 10),
                               Icon(Icons.person_outline, size: 11, color: AppTheme.textSubtle),
                               SizedBox(width: 3),
-                              Text(issue['citizen']['name'] ?? '', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                              Flexible(
+                                child: Text(
+                                  '${issue['citizen']['name'] ?? ''} (${_roleLabel(issue['citizen']['role'])})',
+                                  style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -329,20 +344,90 @@ class _IssuesScreenState extends State<IssuesScreen> {
     );
   }
 
-  void _confirmDelete(String id) {
+  String _roleLabel(dynamic role) {
+    final r = (role ?? 'citizen').toString().toLowerCase();
+    if (r == 'admin') return 'Admin';
+    if (r == 'moderator') return 'Moderator';
+    return 'Citizen';
+  }
+
+  void _confirmDelete(dynamic issue) {
+    final name = issue['citizen']?['name'] ?? 'Unknown';
+    final role = _roleLabel(issue['citizen']?['role']);
     Get.defaultDialog(
       title: 'Delete Issue',
       titleStyle: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
       backgroundColor: AppTheme.surfaceColor,
-      middleText: 'Are you sure you want to delete this issue?',
+      middleText: 'Delete this issue?\n\nReported by: $name ($role)\n\nThis cannot be undone.',
       textConfirm: 'Delete',
       textCancel: 'Cancel',
       confirmTextColor: Colors.white,
       buttonColor: Colors.red,
       onConfirm: () async {
-        await controller.deleteIssue(id);
+        await controller.deleteIssue(issue['_id']);
         Get.back();
         Get.snackbar('Deleted', 'Issue deleted successfully');
+      },
+    );
+  }
+
+  void _showEditIssue(dynamic issue) {
+    final titleCtrl = TextEditingController(text: issue['title'] ?? '');
+    final descCtrl = TextEditingController(text: issue['description'] ?? '');
+    final districtCtrl = TextEditingController(text: issue['district'] ?? '');
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Edit Issue'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reported by: ${issue['citizen']?['name'] ?? 'Unknown'} (${_roleLabel(issue['citizen']?['role'])})',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D9488)),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Title')),
+                    const SizedBox(height: 8),
+                    TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'District')),
+                    const SizedBox(height: 8),
+                    TextField(controller: descCtrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setDialogState(() => saving = true);
+                          final ok = await controller.editIssue(issue['_id'], {
+                            'title': titleCtrl.text.trim(),
+                            'description': descCtrl.text.trim(),
+                            'district': districtCtrl.text.trim(),
+                          });
+                          if (!context.mounted) return;
+                          Navigator.pop(ctx);
+                          if (ok) {
+                            AppNotification.success('Saved', 'Issue updated.');
+                          }
+                        },
+                  child: saving
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -374,7 +459,9 @@ class _IssuesScreenState extends State<IssuesScreen> {
   }
 
   void _showAdminUpdate(dynamic issue) {
-    String status = issue['status'] ?? 'Pending';
+    final currentStatus = (issue['status'] ?? 'Pending').toString();
+    final next = StatusWorkflow.nextIssueStatus(currentStatus);
+    final canReject = StatusWorkflow.canRejectIssue(currentStatus);
     final notesCtrl = TextEditingController(text: issue['adminNotes'] ?? '');
     bool saving = false;
 
@@ -416,7 +503,7 @@ class _IssuesScreenState extends State<IssuesScreen> {
                           const SizedBox(width: 12),
                           const Expanded(
                             child: Text(
-                              'Issue Management',
+                              'Issue Audit',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 17,
@@ -473,7 +560,7 @@ class _IssuesScreenState extends State<IssuesScreen> {
                             ),
                             const SizedBox(height: 16),
                             const Text(
-                              'NEW STATUS',
+                              'AUDIT STATUS',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -482,35 +569,18 @@ class _IssuesScreenState extends State<IssuesScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            DropdownButtonFormField<String>(
-                              value: status,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFF14B8A6), width: 1.5),
+                            _IssueAuditTrail(current: currentStatus),
+                            if (next != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Next step: → $next',
+                                style: const TextStyle(
+                                  color: Color(0xFF0D9488),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              items: const [
-                                DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                                DropdownMenuItem(value: 'Under Review', child: Text('Under Review')),
-                                DropdownMenuItem(value: 'Resolved', child: Text('Resolved')),
-                                DropdownMenuItem(value: 'Rejected', child: Text('Rejected')),
-                              ],
-                              onChanged: saving
-                                  ? null
-                                  : (v) => setDialogState(() => status = v ?? 'Pending'),
-                            ),
+                            ],
                             const SizedBox(height: 16),
                             const Text(
                               'ADMIN RESPONSE',
@@ -565,29 +635,28 @@ class _IssuesScreenState extends State<IssuesScreen> {
                                       ],
                                     ),
                                     child: ElevatedButton(
-                                      onPressed: saving
+                                      onPressed: saving || next == null
                                           ? null
                                           : () async {
                                               setDialogState(() => saving = true);
                                               final success = await controller.updateIssueStatus(
                                                 issue['_id'],
-                                                status,
+                                                action: 'advance',
                                                 adminNotes: notesCtrl.text.trim(),
                                               );
                                               if (!context.mounted) return;
                                               Navigator.pop(ctx);
                                               if (success) {
                                                 AppNotification.success(
-                                                  'Response Saved',
-                                                  'Issue status updated to $status.',
+                                                  'Advanced',
+                                                  'Issue moved to $next.',
                                                 );
-                                              } else {
-                                                AppNotification.error('Could not save response');
                                               }
                                             },
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.transparent,
                                         shadowColor: Colors.transparent,
+                                        disabledBackgroundColor: Colors.transparent,
                                         padding: const EdgeInsets.symmetric(vertical: 14),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                       ),
@@ -597,49 +666,50 @@ class _IssuesScreenState extends State<IssuesScreen> {
                                               height: 18,
                                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                             )
-                                          : const Text(
-                                              'Save Response',
-                                              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                                          : Text(
+                                              next == null ? 'Audit complete' : 'Advance to $next',
+                                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                              textAlign: TextAlign.center,
                                             ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                ElevatedButton(
-                                  onPressed: saving
-                                      ? null
-                                      : () async {
-                                          setDialogState(() => saving = true);
-                                          final success = await controller.updateIssueStatus(
-                                            issue['_id'],
-                                            'Rejected',
-                                            adminNotes: notesCtrl.text.trim().isNotEmpty
-                                                ? notesCtrl.text.trim()
-                                                : 'This issue was rejected by the moderation team.',
-                                          );
-                                          if (!context.mounted) return;
-                                          Navigator.pop(ctx);
-                                          if (success) {
-                                            AppNotification.success(
-                                              'Issue Rejected',
-                                              'The issue has been marked as Rejected.',
-                                              icon: Icons.cancel_rounded,
+                                if (canReject) ...[
+                                  const SizedBox(width: 10),
+                                  ElevatedButton(
+                                    onPressed: saving
+                                        ? null
+                                        : () async {
+                                            setDialogState(() => saving = true);
+                                            final success = await controller.updateIssueStatus(
+                                              issue['_id'],
+                                              action: 'reject',
+                                              adminNotes: notesCtrl.text.trim().isNotEmpty
+                                                  ? notesCtrl.text.trim()
+                                                  : 'This issue was rejected by the moderation team.',
                                             );
-                                          } else {
-                                            AppNotification.error('Could not reject issue');
-                                          }
-                                        },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEF4444),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                            if (!context.mounted) return;
+                                            Navigator.pop(ctx);
+                                            if (success) {
+                                              AppNotification.success(
+                                                'Issue Rejected',
+                                                'The issue has been marked as Rejected.',
+                                                icon: Icons.cancel_rounded,
+                                              );
+                                            }
+                                          },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    ),
+                                    child: const Text(
+                                      'Reject',
+                                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                                    ),
                                   ),
-                                  child: const Text(
-                                    'Reject',
-                                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
-                                  ),
-                                ),
+                                ],
                               ],
                             ),
                           ],
@@ -1361,6 +1431,69 @@ class _IssueDetailsSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _IssueAuditTrail extends StatelessWidget {
+  final String current;
+  const _IssueAuditTrail({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRejected = current == 'Rejected';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (var i = 0; i < StatusWorkflow.issueFlow.length; i++) ...[
+              if (i > 0)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Icon(Icons.arrow_forward, size: 12, color: Color(0xFF94A3B8)),
+                ),
+              _chip(
+                StatusWorkflow.issueFlow[i],
+                active: !isRejected && current == StatusWorkflow.issueFlow[i],
+                done: !isRejected &&
+                    StatusWorkflow.issueFlow.indexOf(current) >
+                        StatusWorkflow.issueFlow.indexOf(StatusWorkflow.issueFlow[i]),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        _chip('Rejected (branch)', active: isRejected, done: false, reject: true),
+      ],
+    );
+  }
+
+  Widget _chip(String label, {required bool active, required bool done, bool reject = false}) {
+    Color bg;
+    Color fg;
+    if (active) {
+      bg = reject ? const Color(0xFFEF4444) : const Color(0xFF0D9488);
+      fg = Colors.white;
+    } else if (done) {
+      bg = const Color(0xFFCCFBF1);
+      fg = const Color(0xFF0F766E);
+    } else {
+      bg = const Color(0xFFF1F5F9);
+      fg = const Color(0xFF94A3B8);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '${done ? '✓ ' : ''}$label',
+        style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w700),
       ),
     );
   }

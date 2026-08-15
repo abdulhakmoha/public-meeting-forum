@@ -72,7 +72,9 @@ exports.updateProfile = async (req, res) => {
       user.district = req.body.district || user.district;
 
       if (req.file) {
-        user.profilePicture = `/uploads/${req.file.filename}`;
+        const { saveUploadFile } = require('../utils/mediaStore');
+        const saved = await saveUploadFile(req.file);
+        user.profilePicture = saved.fileUrl;
       }
 
       // Password change only via newPassword + currentPassword (no bare `password` field)
