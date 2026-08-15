@@ -41,18 +41,34 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
           return Center(child: Text('Meeting not found', style: TextStyle(color: AppTheme.textPrimary)));
         }
 
-        final date = meeting['date'] != null ? DateTime.tryParse(meeting['date']) : null;
-        final isJoined = (meeting['attendees'] as List?)?.any(
-          (a) => a is Map ? a['_id'] == authCtrl.user['_id'] : a == authCtrl.user['_id'],
-        ) ?? false;
+        final date = meeting['date'] != null ? DateTime.tryParse(meeting['date'].toString()) : null;
+        final myId = (authCtrl.user['_id'] ?? '').toString();
+        final organizerId = meeting['organizer'] is Map
+            ? (meeting['organizer']['_id'] ?? '').toString()
+            : (meeting['organizer'] ?? '').toString();
+        final isOrganizer = myId.isNotEmpty && myId == organizerId;
+        final isJoined = isOrganizer ||
+            ((meeting['attendees'] as List?)?.any((a) {
+                  final id = a is Map ? (a['_id'] ?? '').toString() : a.toString();
+                  return id == myId;
+                }) ??
+                false);
         DateTime? endDate;
         if (date != null) {
           final endTime = meeting['endTime'] as String?;
+          // Use local calendar date (avoid UTC shift marking today's meeting as ended)
+          final localDay = DateTime(date.toLocal().year, date.toLocal().month, date.toLocal().day);
           if (endTime != null && endTime.contains(':')) {
             final parts = endTime.split(':');
-            endDate = DateTime(date.year, date.month, date.day, int.parse(parts[0]), int.parse(parts[1]));
+            endDate = DateTime(
+              localDay.year,
+              localDay.month,
+              localDay.day,
+              int.tryParse(parts[0]) ?? 23,
+              int.tryParse(parts[1]) ?? 59,
+            );
           } else {
-            endDate = date;
+            endDate = DateTime(localDay.year, localDay.month, localDay.day, 23, 59);
           }
         }
         final isPast = endDate != null && endDate.isBefore(DateTime.now());
@@ -110,7 +126,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                       _buildOrganizerCard(meeting['organizer']),
                       const SizedBox(height: 16),
                     ],
-                    _buildActionButtons(meeting, isJoined, isEnded),
+                    _buildActionButtons(meeting, isJoined, isEnded, isOrganizer),
                     const SizedBox(height: 24),
                     _buildAttendeesSection(meeting),
                     const SizedBox(height: 24),
@@ -242,7 +258,18 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     );
   }
 
-  Widget _buildActionButtons(Map meeting, bool isJoined, bool isEnded) {
+  void _openVirtual(Map meeting) {
+    final room = (meeting['roomName'] as String?)?.trim();
+    Get.to(
+      () => VirtualMeetingScreen(
+        meetingId: widget.meetingId,
+        meetingTitle: meeting['title']?.toString(),
+        roomName: (room != null && room.isNotEmpty) ? room : 'PMCFMS-Meeting-${widget.meetingId}',
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(Map meeting, bool isJoined, bool isEnded, bool isOrganizer) {
     final isCancelled = meeting['status'] == 'cancelled';
 
     if (isEnded && !isCancelled) {
@@ -278,7 +305,13 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton.icon(
-              onPressed: () => controller.joinMeeting(widget.meetingId),
+              onPressed: () async {
+                final ok = await controller.joinMeeting(widget.meetingId);
+                if (ok &&
+                    (meeting['meetingType'] == 'zoom' || meeting['meetingType'] == 'virtual')) {
+                  _openVirtual(meeting);
+                }
+              },
               icon: const Icon(Icons.how_to_reg, color: Colors.white),
               label: const Text('RSVP Now', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
               style: ElevatedButton.styleFrom(
@@ -300,13 +333,16 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
             child: const Text('You are attending',
                 textAlign: TextAlign.center, style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           ),
-        if (!isCancelled && isJoined && (meeting['meetingType'] == 'zoom' || meeting['meetingType'] == 'virtual')) ...[
+        if (!isCancelled &&
+            !isEnded &&
+            (meeting['meetingType'] == 'zoom' || meeting['meetingType'] == 'virtual') &&
+            (isJoined || isOrganizer)) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             height: 52,
             child: ElevatedButton.icon(
-              onPressed: () => Get.to(() => const VirtualMeetingScreen()),
+              onPressed: () => _openVirtual(meeting),
               icon: const Icon(Icons.videocam, color: Colors.white),
               label: const Text('Join Virtual Meeting', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
               style: ElevatedButton.styleFrom(

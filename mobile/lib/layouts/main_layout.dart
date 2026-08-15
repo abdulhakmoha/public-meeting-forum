@@ -12,8 +12,11 @@ import '../controllers/notification_controller.dart';
 import '../controllers/language_controller.dart';
 import '../controllers/forum_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../utils/meeting_resume_store.dart';
 import '../views/dashboard/dashboard_screen.dart';
 import '../views/meetings/meetings_screen.dart';
+import '../views/meetings/meeting_details_screen.dart';
+import '../views/meetings/virtual_meeting_screen.dart';
 import '../views/forums/forums_screen.dart';
 import '../views/forums/create_forum_screen.dart';
 import '../views/polls/polls_screen.dart';
@@ -59,6 +62,24 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   Future<void> _resumeAfterFilePicker() async {
+    // Restore meeting details after Jitsi / browser returns (Activity recreate)
+    final meetingResume = await MeetingResumeStore.consume();
+    if (meetingResume.id != null && meetingResume.id!.isNotEmpty && mounted) {
+      setState(() => _currentIndex = 1); // Meetings tab
+      await Future.delayed(const Duration(milliseconds: 80));
+      if (!mounted) return;
+      await Get.to(() => MeetingDetailsScreen(meetingId: meetingResume.id!));
+      if (meetingResume.openVirtual && mounted) {
+        await Get.to(
+          () => VirtualMeetingScreen(
+            meetingId: meetingResume.id,
+            roomName: 'PMCFMS-Meeting-${meetingResume.id}',
+          ),
+        );
+      }
+      return;
+    }
+
     // Only reopen create/upload screens when a staged file actually exists.
     // A leftover resume flag alone used to open Register New Project on every Refresh.
     final projectStaged = await ProjectDraftStore.peekStagedFiles();

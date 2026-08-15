@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'meeting_details_screen.dart';
 import '../../controllers/meeting_controller.dart';
 import '../../utils/app_notification.dart';
 import '../../utils/theme.dart';
@@ -109,15 +110,17 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       'meetingType': _meetingType,
     };
 
-    final success = await controller.createMeeting(meetingData);
-    if (success) {
+    final createdId = await controller.createMeeting(meetingData);
+    if (createdId != null) {
       Get.back();
-      // Show after leaving create screen so Get.back() does not dismiss the dialog
       Future.microtask(() {
         AppNotification.success(
           'Meeting Successful',
           'Meeting scheduled successfully',
         );
+        if (createdId.isNotEmpty) {
+          Get.to(() => MeetingDetailsScreen(meetingId: createdId));
+        }
       });
     }
   }

@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:jitsi_meet_wrapper/jitsi_meet_wrapper.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/auth_controller.dart';
+import '../../utils/meeting_resume_store.dart';
 import '../../utils/theme.dart';
 
 class VirtualMeetingScreen extends StatefulWidget {
   final String? meetingId;
   final String? meetingTitle;
-  const VirtualMeetingScreen({Key? key, this.meetingId, this.meetingTitle}) : super(key: key);
+  final String? roomName;
+
+  const VirtualMeetingScreen({
+    Key? key,
+    this.meetingId,
+    this.meetingTitle,
+    this.roomName,
+  }) : super(key: key);
 
   @override
   State<VirtualMeetingScreen> createState() => _VirtualMeetingScreenState();
@@ -18,14 +27,26 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
   late TextEditingController _roomCtrl;
   bool _audioEnabled = true;
   bool _videoEnabled = true;
-  String _meetingType = 'public';
+  bool _joining = false;
+
+  String get _defaultRoom {
+    if (widget.roomName != null && widget.roomName!.trim().isNotEmpty) {
+      return widget.roomName!.trim();
+    }
+    if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
+      return 'PMCFMS-Meeting-${widget.meetingId}';
+    }
+    return 'PMCFMS-Meeting-${DateTime.now().millisecondsSinceEpoch}';
+  }
 
   @override
   void initState() {
     super.initState();
-    _roomCtrl = TextEditingController(
-      text: widget.meetingId != null ? 'PMCFMS-Meeting-${widget.meetingId}' : 'PMCFMS-Meeting-${DateTime.now().millisecondsSinceEpoch}',
-    );
+    _roomCtrl = TextEditingController(text: _defaultRoom);
+    // Persist so Android Activity recreate after Jitsi returns to meeting, not blank dashboard
+    if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
+      MeetingResumeStore.save(widget.meetingId!, openVirtual: true);
+    }
   }
 
   @override
@@ -34,18 +55,41 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
     super.dispose();
   }
 
-  Future<void> _joinMeeting() async {
+  Uri _browserUrl(String room) {
+    final clean = room.replaceAll(RegExp(r'^https?://[^/]+/'), '');
+    return Uri.parse('https://jitsi.belnet.be/${Uri.encodeComponent(clean)}');
+  }
+
+  Future<void> _openInBrowser(String room) async {
+    final url = _browserUrl(room);
+    final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      Get.snackbar('Error', 'Could not open browser for the meeting link');
+    }
+  }
+
+  Future<void> _joinMeeting({bool preferBrowser = false}) async {
     final room = _roomCtrl.text.trim();
     if (room.isEmpty) {
       Get.snackbar('Error', 'Room name is required');
       return;
     }
 
+    if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
+      await MeetingResumeStore.save(widget.meetingId!, openVirtual: true);
+    }
+
+    setState(() => _joining = true);
     final userName = authCtrl.user['name'] ?? 'User';
     final userEmail = authCtrl.user['email'] ?? '';
 
     try {
-      var options = JitsiMeetingOptions(
+      if (preferBrowser) {
+        await _openInBrowser(room);
+        return;
+      }
+
+      final options = JitsiMeetingOptions(
         roomNameOrUrl: room,
         serverUrl: 'https://jitsi.belnet.be',
         subject: widget.meetingTitle ?? 'Virtual Meeting',
@@ -57,8 +101,18 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
 
       await JitsiMeetWrapper.joinMeeting(options: options);
     } catch (error) {
-      debugPrint("error: $error");
-      Get.snackbar('Error', 'Failed to join meeting');
+      debugPrint('Jitsi join error: $error');
+      // Native SDK often crashes / recreates Activity — fall back to browser
+      await _openInBrowser(room);
+      if (mounted) {
+        Get.snackbar(
+          'Opened in browser',
+          'In-app video failed; joining via browser instead.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _joining = false);
     }
   }
 
@@ -72,7 +126,6 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -83,7 +136,10 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     child: const Icon(Icons.videocam, color: Colors.white, size: 28),
                   ),
                   const SizedBox(width: 16),
@@ -91,12 +147,21 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Video Conference', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text(
+                          'Video Conference',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Powered by Jitsi Meet', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)),
+                        Text(
+                          'Powered by Jitsi Meet',
+                          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
+                        ),
                         if (widget.meetingTitle != null) ...[
                           const SizedBox(height: 4),
-                          Text(widget.meetingTitle!, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11)),
+                          Text(
+                            widget.meetingTitle!,
+                            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11),
+                          ),
                         ],
                       ],
                     ),
@@ -104,37 +169,26 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
                 ],
               ),
             ),
-            SizedBox(height: 24),
-            // Room Name
+            const SizedBox(height: 24),
             Text('Room Name', style: TextStyle(color: AppTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             TextField(
               controller: _roomCtrl,
+              readOnly: widget.meetingId != null,
               style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'e.g. Barangay-Meeting-2026',
+                hintText: 'Meeting room',
                 hintStyle: TextStyle(color: AppTheme.textSubtle),
                 prefixIcon: Icon(Icons.meeting_room_outlined, color: AppTheme.textSubtle, size: 20),
-                filled: true, fillColor: AppTheme.surfaceColor,
+                filled: true,
+                fillColor: AppTheme.surfaceColor,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
-            SizedBox(height: 20),
-            // Meeting Type
-            Text('Meeting Type', style: TextStyle(color: AppTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _typeChip('public', 'Public'),
-                const SizedBox(width: 10),
-                _typeChip('private', 'Private (Invite Only)'),
-              ],
-            ),
             const SizedBox(height: 24),
-            // Settings
             Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppTheme.surfaceColor,
                 borderRadius: BorderRadius.circular(16),
@@ -150,11 +204,21 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
             ),
             const SizedBox(height: 24),
             SizedBox(
-              width: double.infinity, height: 56,
+              width: double.infinity,
+              height: 56,
               child: ElevatedButton.icon(
-                onPressed: _joinMeeting,
-                icon: const Icon(Icons.videocam, color: Colors.white),
-                label: Text('Join Meeting', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                onPressed: _joining ? null : () => _joinMeeting(),
+                icon: _joining
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.videocam, color: Colors.white),
+                label: Text(
+                  _joining ? 'Joining...' : 'Join Meeting',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -162,29 +226,31 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
                 ),
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _joining ? null : () => _joinMeeting(preferBrowser: true),
+                icon: const Icon(Icons.open_in_browser),
+                label: const Text('Join in Browser (recommended)'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryColor,
+                  side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Center(
-              child: Text('Room ID: ${_roomCtrl.text.isNotEmpty ? _roomCtrl.text.substring(0, _roomCtrl.text.length > 20 ? 20 : _roomCtrl.text.length) : ''}...',
-                  style: TextStyle(color: AppTheme.textSubtle, fontSize: 10)),
+              child: Text(
+                'Same room as the website: ${_roomCtrl.text}',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSubtle, fontSize: 11),
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _typeChip(String value, String label) {
-    final active = _meetingType == value;
-    return GestureDetector(
-      onTap: () => setState(() => _meetingType = value),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primaryColor.withOpacity(0.15) : AppTheme.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppTheme.primaryColor : AppTheme.borderColor),
-        ),
-        child: Text(label, style: TextStyle(color: active ? AppTheme.primaryColor : AppTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -193,7 +259,7 @@ class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
     return Row(
       children: [
         Icon(icon, size: 20, color: value ? AppTheme.primaryColor : AppTheme.textSubtle),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         Expanded(child: Text(label, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
         Switch(
           value: value,

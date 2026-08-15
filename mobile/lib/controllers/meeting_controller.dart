@@ -89,20 +89,25 @@ class MeetingController extends GetxController {
     }
   }
 
-  Future<bool> createMeeting(Map<String, dynamic> meetingData) async {
+  Future<String?> createMeeting(Map<String, dynamic> meetingData) async {
     try {
       final response = await ApiService.post(ApiConstants.meetings, meetingData);
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
         await fetchMeetings();
-        return true;
+        final created = data['data'];
+        if (created is Map && created['_id'] != null) {
+          return created['_id'].toString();
+        }
+        return '';
       } else {
         final data = jsonDecode(response.body);
         AppNotification.error(data['message'] ?? 'Failed to create meeting');
-        return false;
+        return null;
       }
     } catch (e) {
       AppNotification.error('Could not connect to server');
-      return false;
+      return null;
     }
   }
 

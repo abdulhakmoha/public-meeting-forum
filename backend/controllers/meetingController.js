@@ -99,9 +99,19 @@ exports.createMeeting = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot schedule a meeting in the past' });
     }
     
-    req.body.organizer = req.user.id; 
+    req.body.organizer = req.user.id;
     
     const meeting = await Meeting.create(req.body);
+    // Stable Jitsi room shared by web + mobile
+    if (!meeting.roomName) {
+      meeting.roomName = `PMCFMS-Meeting-${meeting._id}`;
+      await meeting.save();
+    }
+    // Organizer is automatically an attendee
+    if (!meeting.attendees.map(String).includes(String(req.user.id))) {
+      meeting.attendees.push(req.user.id);
+      await meeting.save();
+    }
     console.log('✅ Meeting created successfully:', meeting._id);
     
     res.status(201).json({ success: true, data: meeting });
