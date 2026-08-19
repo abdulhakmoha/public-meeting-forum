@@ -200,9 +200,14 @@ The code expires in 1 hour. If you did not request this, ignore this email.`,
       user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
+      const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
       return res.status(502).json({
         message:
-          'Could not send the reset email. Check SMTP settings (Gmail needs an App Password) and try again.',
+          lastError.includes('Invalid login') || lastError.includes('EAUTH')
+            ? 'Gmail rejected the login. On Render, SMTP_PASSWORD must be the 16-letter Gmail App Password (no spaces).'
+            : lastError.includes('timeout') || lastError.includes('ETIMEDOUT') || lastError.includes('ECONNECTION')
+              ? 'The server could not reach Gmail. Wait a minute and try again.'
+              : `Could not send the reset email. ${lastError || 'Check SMTP settings and try again.'}`,
       });
     }
   } catch (error) {

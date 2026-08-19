@@ -1,4 +1,11 @@
+const dns = require('dns');
 const nodemailer = require('nodemailer');
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {
+  // Older Node versions
+}
 
 function cleanEnv(value) {
   return String(value || '')
@@ -7,7 +14,7 @@ function cleanEnv(value) {
 }
 
 function smtpConfig() {
-  const host = cleanEnv(process.env.SMTP_HOST);
+  const host = cleanEnv(process.env.SMTP_HOST) || 'smtp.gmail.com';
   const user = cleanEnv(process.env.SMTP_EMAIL);
   const pass = cleanEnv(process.env.SMTP_PASSWORD).replace(/\s/g, '');
   const port = Number(cleanEnv(process.env.SMTP_PORT) || 587);
@@ -17,58 +24,63 @@ function smtpConfig() {
 }
 
 function isSmtpConfigured() {
+  const { user, pass } = smtpConfig();
+  return !!(user && pass);
+}
+
+function createTransporter(port) {
   const { host, user, pass } = smtpConfig();
-  return !!(host && user && pass);
+  return nodemailer.createTransport({
+    host: host || 'smtp.gmail.com',
+    port,
+    secure: port === 465,
+    requireTLS: port === 587,
+    auth: { user, pass },
+    family: 4,
+    connectionTimeout: 12000,
+    greetingTimeout: 12000,
+    socketTimeout: 20000,
+    tls: { minVersion: 'TLSv1.2' },
+  });
 }
 
 let transporter;
 let verified = false;
+let lastError = '';
 
 function getTransporter() {
   if (transporter) return transporter;
-
-  const { host, user, pass, port } = smtpConfig();
-  const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
-
-  transporter = isGmail
-    ? nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 30000,
-      })
-    : nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465,
-        requireTLS: port === 587,
-        auth: { user, pass },
-        connectionTimeout: 20000,
-        greetingTimeout: 20000,
-        socketTimeout: 30000,
-      });
-
+  const { port } = smtpConfig();
+  transporter = createTransporter(port === 465 ? 465 : 587);
   return transporter;
 }
 
 async function verifySmtp() {
   if (!isSmtpConfigured()) {
-    console.warn('⚠️ SMTP not fully set (need SMTP_HOST, SMTP_EMAIL, SMTP_PASSWORD)');
+    lastError = 'SMTP_EMAIL or SMTP_PASSWORD missing';
+    console.warn('⚠️ SMTP not fully set (need SMTP_EMAIL, SMTP_PASSWORD)');
     return false;
   }
-  try {
-    await getTransporter().verify();
-    verified = true;
-    const { user } = smtpConfig();
-    console.log(`✅ Gmail SMTP ready (${user})`);
-    return true;
-  } catch (err) {
-    verified = false;
-    console.error('❌ Gmail SMTP login failed:', err.message);
-    console.error('Use a Gmail App Password (16 letters), not the normal Gmail password.');
-    return false;
+
+  const ports = smtpConfig().port === 465 ? [465, 587] : [587, 465];
+  for (const port of ports) {
+    try {
+      transporter = createTransporter(port);
+      await transporter.verify();
+      verified = true;
+      lastError = '';
+      const { user } = smtpConfig();
+      console.log(`✅ Gmail SMTP ready (${user}) on port ${port}`);
+      return true;
+    } catch (err) {
+      lastError = err.message || String(err);
+      console.error(`❌ Gmail SMTP port ${port} failed:`, lastError);
+      transporter = null;
+      verified = false;
+    }
   }
+  console.error('Use a Gmail App Password (16 letters), not the normal Gmail password.');
+  return false;
 }
 
 const sendEmail = async (options) => {
@@ -81,16 +93,17 @@ const sendEmail = async (options) => {
     return { success: true, mocked: true };
   }
 
-  const { fromEmail, fromName, user } = smtpConfig();
-  // Gmail rejects From addresses that are not the authenticated account
+  const { fromName, user } = smtpConfig();
   const from = `"${fromName}" <${user}>`;
-  if (fromEmail && fromEmail.toLowerCase() !== user.toLowerCase()) {
-    console.warn(`FROM_EMAIL (${fromEmail}) differs from SMTP_EMAIL (${user}); sending as ${user}`);
-  }
 
   try {
     if (!verified) {
-      await verifySmtp();
+      const ok = await verifySmtp();
+      if (!ok) {
+        const err = new Error(lastError || 'Gmail SMTP login failed');
+        err.code = 'EAUTH';
+        throw err;
+      }
     }
     const info = await getTransporter().sendMail({
       from,
@@ -104,12 +117,14 @@ const sendEmail = async (options) => {
   } catch (err) {
     transporter = null;
     verified = false;
-    console.error(`Email FAIL → ${options.email}:`, err.message);
+    lastError = err.message || String(err);
+    console.error(`Email FAIL → ${options.email}:`, lastError);
     throw err;
   }
 };
 
 sendEmail.isSmtpConfigured = isSmtpConfigured;
 sendEmail.verifySmtp = verifySmtp;
+sendEmail.lastError = () => lastError;
 
 module.exports = sendEmail;
