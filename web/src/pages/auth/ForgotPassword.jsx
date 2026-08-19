@@ -52,7 +52,8 @@ export default function ForgotPassword() {
         <div className="mb-7">
           <h1 className="font-display text-3xl text-slate-900 tracking-tight mb-2">Forgot password</h1>
           <p className="text-slate-600">
-            Enter your account email and we&apos;ll send you a link to reset your password.
+            Enter your account email. We will send a website link you can open in any browser
+            (this computer or your phone). You do not need the mobile app.
           </p>
         </div>
 

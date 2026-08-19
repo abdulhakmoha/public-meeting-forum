@@ -3,6 +3,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
+const { getResetPasswordUrl } = require('../utils/frontendUrl');
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -134,7 +135,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const okMessage =
-      'If an account exists for that email, a password reset link has been sent. Check inbox and Spam.';
+      'If an account exists for that email, a reset link was sent. Open the email and click the link in any web browser (computer or phone). You do not need the mobile app.';
 
     const user = await findUserByEmail(email);
     if (!user) {
@@ -152,8 +153,7 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    const frontendUrl = (process.env.FRONTEND_URL || 'https://public-meeting-forum.vercel.app').replace(/\/$/, '');
-    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+    const resetUrl = getResetPasswordUrl(resetToken);
 
     const smtpReady = sendEmail.isSmtpConfigured();
     if (!smtpReady) {
@@ -170,13 +170,29 @@ exports.forgotPassword = async (req, res) => {
     try {
       await sendEmail({
         email: user.email,
-        subject: 'PMCFMS Password Reset',
-        message: `You requested a password reset. Open this link within 1 hour:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+        subject: 'Reset your PMCFMS password',
+        message: `You requested a password reset for PMCFMS.
+
+Open this website link in any browser (computer or phone). You do not need the mobile app:
+
+${resetUrl}
+
+The page will ask you to choose a new password. The link expires in 1 hour.
+
+If you did not request this, ignore this email.`,
         html: `
-          <p>You requested a password reset for your PMCFMS account.</p>
-          <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#0D9488;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a></p>
-          <p>Or copy this link: <br/><a href="${resetUrl}">${resetUrl}</a></p>
-          <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
+            <h2 style="color:#0d9488;margin:0 0 16px;">Reset your PMCFMS password</h2>
+            <p>Click the button below. It opens the <strong>PMCFMS website</strong> in your browser (computer or phone). You do not need the mobile app.</p>
+            <p style="margin:28px 0;">
+              <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 24px;background:#0D9488;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">
+                Open website and set new password
+              </a>
+            </p>
+            <p style="font-size:14px;color:#334155;">If the button does not work, copy this link into Chrome or any browser:</p>
+            <p style="font-size:13px;word-break:break-all;"><a href="${resetUrl}" target="_blank" rel="noopener noreferrer">${resetUrl}</a></p>
+            <p style="font-size:13px;color:#64748b;">This link expires in 1 hour. If you did not request a reset, you can ignore this email.</p>
+          </div>
         `,
       });
       console.log(`Forgot-password email sent to ${user.email}`);

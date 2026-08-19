@@ -12,6 +12,10 @@ const { protect } = require('../middleware/authMiddleware');
 router.post('/register', register);
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
+router.get('/reset-password/:token', (req, res) => {
+  const { getResetPasswordUrl } = require('../utils/frontendUrl');
+  return res.redirect(302, getResetPasswordUrl(req.params.token));
+});
 router.post('/reset-password/:token', resetPassword);
 router.get('/me', protect, getMe);
 

@@ -57,7 +57,9 @@ export default function ResetPassword() {
 
         <div className="mb-7">
           <h1 className="font-display text-3xl text-slate-900 tracking-tight mb-2">Set new password</h1>
-          <p className="text-slate-600">Choose a new password for your PMCFMS account.</p>
+          <p className="text-slate-600">
+            Open this website and choose a new password. You do not need the mobile app.
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/50 p-6 sm:p-8">
