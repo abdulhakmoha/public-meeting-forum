@@ -98,12 +98,8 @@ const sendEmail = async (options) => {
 
   try {
     if (!verified) {
-      const ok = await verifySmtp();
-      if (!ok) {
-        const err = new Error(lastError || 'Gmail SMTP login failed');
-        err.code = 'EAUTH';
-        throw err;
-      }
+      // Do not block the HTTP request with verify+retry; just send.
+      transporter = getTransporter();
     }
     const info = await getTransporter().sendMail({
       from,

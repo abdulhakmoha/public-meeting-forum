@@ -98,6 +98,11 @@ app.get('/reset-password/:token', (req, res) => {
   res.redirect(302, getResetPasswordUrl(req.params.token));
 });
 
+app.get('/api/health', (req, res) => {
+  const sendEmail = require('./utils/sendEmail');
+  res.json({ ok: true, smtp: sendEmail.isSmtpConfigured() });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', require('./routes/meetingRoutes'));
 app.use('/api/forums', require('./routes/forumRoutes'));

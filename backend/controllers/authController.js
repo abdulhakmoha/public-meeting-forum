@@ -134,7 +134,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const okMessage =
-      'If an account exists, a 6-digit code was sent. Stay on this computer. Read the code from your phone email and type it here. Do not tap the email link on your phone.';
+      'A 6-digit code is on the way. Stay on this computer. Wait a few seconds, read the code from your phone email, and type it here. Do not tap the email.';
 
     const user = await findUserByEmail(email);
     if (!user) {
@@ -166,16 +166,21 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: `${resetCode} is your PMCFMS reset code`,
-        message: `Your PMCFMS password reset code is: ${resetCode}
+    res.json({ message: okMessage, codeSent: true });
+
+    const toEmail = user.email;
+    const codeForMail = resetCode;
+    setImmediate(async () => {
+      try {
+        await sendEmail({
+          email: toEmail,
+          subject: `${codeForMail} is your PMCFMS reset code`,
+          message: `Your PMCFMS password reset code is: ${codeForMail}
 
 Stay on your computer. Type this code on the website. Do NOT tap any link on your phone.
 
 The code expires in 1 hour. If you did not request this, ignore this email.`,
-        html: `
+          html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
             <h2 style="color:#0d9488;margin:0 0 12px;">Your PMCFMS reset code</h2>
             <p style="font-size:16px;line-height:1.5;">
@@ -186,30 +191,18 @@ The code expires in 1 hour. If you did not request this, ignore this email.`,
               Do not tap a link on your phone. Do not open this in the phone browser.
             </p>
             <p style="font-size:36px;letter-spacing:8px;font-weight:800;text-align:center;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:18px 12px;color:#134e4a;">
-              ${resetCode}
+              ${codeForMail}
             </p>
             <p style="font-size:13px;color:#64748b;margin-top:20px;">This code expires in 1 hour. If you did not request a reset, ignore this email.</p>
           </div>
         `,
-      });
-      console.log(`Forgot-password code emailed to ${user.email}`);
-      return res.json({ message: okMessage, codeSent: true });
-    } catch (mailErr) {
-      console.error('Forgot password email failed:', mailErr.message || mailErr);
-      user.resetPasswordToken = undefined;
-      user.resetPasswordCode = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-      const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
-      return res.status(502).json({
-        message:
-          lastError.includes('Invalid login') || lastError.includes('EAUTH')
-            ? 'Gmail rejected the login. On Render, SMTP_PASSWORD must be the 16-letter Gmail App Password (no spaces).'
-            : lastError.includes('timeout') || lastError.includes('ETIMEDOUT') || lastError.includes('ECONNECTION')
-              ? 'The server could not reach Gmail. Wait a minute and try again.'
-              : `Could not send the reset email. ${lastError || 'Check SMTP settings and try again.'}`,
-      });
-    }
+        });
+        console.log(`Forgot-password code emailed to ${toEmail}`);
+      } catch (mailErr) {
+        console.error('Forgot password email failed:', mailErr.message || mailErr);
+      }
+    });
+    return;
   } catch (error) {
     console.error(error);
     if (!res.headersSent) {

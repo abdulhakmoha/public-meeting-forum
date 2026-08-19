@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -16,6 +16,10 @@ export default function ForgotPassword() {
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    api.get('/health').catch(() => {});
+  }, []);
+
   const handleSendCode = async (e) => {
     e.preventDefault();
     setError('');
@@ -32,8 +36,10 @@ export default function ForgotPassword() {
     } catch (err) {
       const msg =
         err.code === 'ECONNABORTED'
-          ? 'Request timed out. The server may be waking up — wait 1 minute and try again.'
-          : err.response?.data?.message || 'Could not send reset email. Try again.';
+          ? 'Request timed out. Wait 1 minute for the server to wake up, then try again.'
+          : err.response?.data?.message
+            || (err.response ? `Server error ${err.response.status}. Wait a minute and try again.` : null)
+            || 'Could not reach the server. Wait 1 minute and try again.';
       setError(msg);
     } finally {
       setIsSubmitting(false);
