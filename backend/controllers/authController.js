@@ -153,16 +153,16 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    const smtpReady = sendEmail.isSmtpConfigured();
+    const smtpReady = sendEmail.isEmailConfigured();
     if (!smtpReady) {
-      console.error('Forgot-password blocked: SMTP_HOST / SMTP_EMAIL / SMTP_PASSWORD not set on server');
+      console.error('Forgot-password blocked: no BREVO_API_KEY or SMTP credentials');
       user.resetPasswordToken = undefined;
       user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       return res.status(503).json({
         message:
-          'Email service is not configured on the server. Ask an admin to set SMTP_HOST, SMTP_EMAIL, and SMTP_PASSWORD (Gmail App Password).',
+          'Email is not configured. On Render add BREVO_API_KEY (brevo.com, free) or upgrade for Gmail SMTP.',
       });
     }
 
@@ -204,12 +204,13 @@ The code expires in 1 hour. If you did not request this, ignore this email.`,
       await user.save({ validateBeforeSave: false });
       const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
       return res.status(502).json({
-        message:
-          lastError.includes('Invalid login') || lastError.includes('EAUTH')
-            ? 'Gmail rejected the login. On Render, SMTP_PASSWORD must be the 16-letter Gmail App Password (no spaces).'
+        message: lastError.includes('Render free tier')
+          ? lastError
+          : lastError.includes('Invalid login') || lastError.includes('EAUTH')
+            ? 'Gmail rejected the login. Use a 16-letter Gmail App Password, or add BREVO_API_KEY on Render.'
             : lastError.includes('timeout') || lastError.includes('ETIMEDOUT') || lastError.includes('ECONNECTION')
-              ? 'The server could not reach Gmail. Wait a minute and try again.'
-              : `Could not send the reset email. ${lastError || 'Check SMTP settings and try again.'}`,
+              ? 'Render free tier blocks Gmail SMTP. Add BREVO_API_KEY in Render Environment (free at brevo.com).'
+              : `Could not send the reset email. ${lastError || 'Check email settings and try again.'}`,
       });
     }
   } catch (error) {

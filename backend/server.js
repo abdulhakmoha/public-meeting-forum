@@ -100,7 +100,11 @@ app.get('/reset-password/:token', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   const sendEmail = require('./utils/sendEmail');
-  res.json({ ok: true, smtp: sendEmail.isSmtpConfigured() });
+  res.json({
+    ok: true,
+    email: sendEmail.isEmailConfigured(),
+    provider: sendEmail.usesBrevo() ? 'brevo' : 'smtp',
+  });
 });
 
 app.use('/api/auth', authRoutes);
