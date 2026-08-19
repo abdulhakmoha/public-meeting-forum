@@ -37,7 +37,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (ok) {
       Get.snackbar(
         'Check your email',
-        'Open the link in a web browser (computer or phone). It is the PMCFMS website, not this app.',
+        'Read the 6-digit code, then type it on the computer website. Do not tap the email.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -70,7 +70,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Enter your account email. We will send a website link. Open it in Chrome or any browser (computer or phone) to set a new password. You do not need to finish this inside the app.',
+                    'Enter your account email. We send a 6-digit code. Open the PMCFMS website on a computer and type the code there. Do not tap the email on this phone.',
                     style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
                   ),
                   const SizedBox(height: 24),

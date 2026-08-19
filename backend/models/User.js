@@ -38,6 +38,11 @@ const UserSchema = new mongoose.Schema({
     default: 'citizen'
   },
   resetPasswordToken: String,
+  resetPasswordCode: String,
+  resetPasswordAttempts: {
+    type: Number,
+    default: 0
+  },
   resetPasswordExpire: Date,
   createdAt: {
     type: Date,

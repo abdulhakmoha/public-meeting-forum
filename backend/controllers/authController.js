@@ -3,7 +3,6 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
-const { getResetPasswordUrl } = require('../utils/frontendUrl');
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -135,30 +134,30 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const okMessage =
-      'If an account exists for that email, a reset link was sent. Open the email and click the link in any web browser (computer or phone). You do not need the mobile app.';
+      'If an account exists, a 6-digit code was sent. Stay on this computer. Read the code from your phone email and type it here. Do not tap the email link on your phone.';
 
     const user = await findUserByEmail(email);
     if (!user) {
-      // Same response timing/shape — do not reveal whether email exists
-      return res.json({ message: okMessage });
+      return res.json({ message: okMessage, codeSent: true });
     }
 
-    // Keep stored email lowercase going forward
     if (user.email !== email) {
       user.email = email;
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetCode = String(crypto.randomInt(100000, 1000000));
     user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+    user.resetPasswordCode = crypto.createHash('sha256').update(resetCode).digest('hex');
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
-
-    const resetUrl = getResetPasswordUrl(resetToken);
 
     const smtpReady = sendEmail.isSmtpConfigured();
     if (!smtpReady) {
       console.error('Forgot-password blocked: SMTP_HOST / SMTP_EMAIL / SMTP_PASSWORD not set on server');
       user.resetPasswordToken = undefined;
+      user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       return res.status(503).json({
@@ -170,36 +169,35 @@ exports.forgotPassword = async (req, res) => {
     try {
       await sendEmail({
         email: user.email,
-        subject: 'Reset your PMCFMS password',
-        message: `You requested a password reset for PMCFMS.
+        subject: `${resetCode} is your PMCFMS reset code`,
+        message: `Your PMCFMS password reset code is: ${resetCode}
 
-Open this website link in any browser (computer or phone). You do not need the mobile app:
+Stay on your computer. Type this code on the website. Do NOT tap any link on your phone.
 
-${resetUrl}
-
-The page will ask you to choose a new password. The link expires in 1 hour.
-
-If you did not request this, ignore this email.`,
+The code expires in 1 hour. If you did not request this, ignore this email.`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
-            <h2 style="color:#0d9488;margin:0 0 16px;">Reset your PMCFMS password</h2>
-            <p>Click the button below. It opens the <strong>PMCFMS website</strong> in your browser (computer or phone). You do not need the mobile app.</p>
-            <p style="margin:28px 0;">
-              <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 24px;background:#0D9488;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">
-                Open website and set new password
-              </a>
+            <h2 style="color:#0d9488;margin:0 0 12px;">Your PMCFMS reset code</h2>
+            <p style="font-size:16px;line-height:1.5;">
+              You are resetting your password on the <strong>computer website</strong>.
+              Look at this code on your phone, then go back to the computer and type it there.
             </p>
-            <p style="font-size:14px;color:#334155;">If the button does not work, copy this link into Chrome or any browser:</p>
-            <p style="font-size:13px;word-break:break-all;"><a href="${resetUrl}" target="_blank" rel="noopener noreferrer">${resetUrl}</a></p>
-            <p style="font-size:13px;color:#64748b;">This link expires in 1 hour. If you did not request a reset, you can ignore this email.</p>
+            <p style="font-size:16px;font-weight:700;color:#b45309;margin:8px 0 20px;">
+              Do not tap a link on your phone. Do not open this in the phone browser.
+            </p>
+            <p style="font-size:36px;letter-spacing:8px;font-weight:800;text-align:center;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:18px 12px;color:#134e4a;">
+              ${resetCode}
+            </p>
+            <p style="font-size:13px;color:#64748b;margin-top:20px;">This code expires in 1 hour. If you did not request a reset, ignore this email.</p>
           </div>
         `,
       });
-      console.log(`Forgot-password email sent to ${user.email}`);
-      return res.json({ message: okMessage });
+      console.log(`Forgot-password code emailed to ${user.email}`);
+      return res.json({ message: okMessage, codeSent: true });
     } catch (mailErr) {
       console.error('Forgot password email failed:', mailErr.message || mailErr);
       user.resetPasswordToken = undefined;
+      user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       return res.status(502).json({
@@ -238,8 +236,58 @@ exports.resetPassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(String(password), salt);
     user.resetPasswordToken = undefined;
+    user.resetPasswordCode = undefined;
+    user.resetPasswordAttempts = 0;
     user.resetPasswordExpire = undefined;
     // Ensure email stays normalized
+    user.email = normalizeEmail(user.email);
+    await user.save();
+
+    res.json({ message: 'Password updated successfully. You can sign in now.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error during password reset' });
+  }
+};
+
+// @desc    Reset password with 6-digit code (stay on computer website)
+// @route   POST /api/auth/reset-with-code
+// @access  Public
+exports.resetWithCode = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const code = String(req.body.code || '').replace(/\D/g, '');
+    const { password } = req.body;
+
+    if (!email || code.length !== 6) {
+      return res.status(400).json({ message: 'Enter the 6-digit code from your email' });
+    }
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await findUserByEmail(email, '+password');
+    if (!user || !user.resetPasswordCode || !user.resetPasswordExpire || user.resetPasswordExpire < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired code. Request a new one on this page.' });
+    }
+
+    if ((user.resetPasswordAttempts || 0) >= 5) {
+      return res.status(429).json({ message: 'Too many attempts. Request a new code.' });
+    }
+
+    const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
+    if (user.resetPasswordCode !== hashedCode) {
+      user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      return res.status(400).json({ message: 'That code is incorrect. Check the email and try again.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(String(password), salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordCode = undefined;
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordExpire = undefined;
     user.email = normalizeEmail(user.email);
     await user.save();
 
