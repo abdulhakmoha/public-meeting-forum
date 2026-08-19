@@ -356,7 +356,7 @@ class DashboardScreen extends StatelessWidget {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            mainAxisExtent: 88,
+                            childAspectRatio: 2.1,
                             children: [
                               if (isAdmin)
                                 _reportStatTile('TOTAL USERS', controller.totalUsers, const Color(0xFFF0FDFA), const Color(0xFF10B981)),

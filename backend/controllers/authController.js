@@ -155,7 +155,7 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'https://public-meeting-forum.vercel.app').replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-    const smtpReady = !!(process.env.SMTP_HOST && process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD);
+    const smtpReady = sendEmail.isSmtpConfigured();
     if (!smtpReady) {
       console.error('Forgot-password blocked: SMTP_HOST / SMTP_EMAIL / SMTP_PASSWORD not set on server');
       user.resetPasswordToken = undefined;

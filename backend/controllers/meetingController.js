@@ -113,8 +113,52 @@ exports.createMeeting = async (req, res) => {
       await meeting.save();
     }
     console.log('✅ Meeting created successfully:', meeting._id);
-    
-    res.status(201).json({ success: true, data: meeting });
+
+    res.status(201).json({
+      success: true,
+      data: meeting,
+      message: 'Meeting created. Email + SMS notifications are being sent to users.',
+    });
+
+    setImmediate(async () => {
+      try {
+        const User = require('../models/User');
+        const { deliverToUsers } = require('../utils/deliverToUsers');
+        const users = await User.find({}).select('name email phone');
+        const meetingDate = new Date(meeting.date).toLocaleString();
+        const meetingDay = new Date(meeting.date).toLocaleDateString();
+        const result = await deliverToUsers(users, {
+          emailSubject: `Public Meeting - ${meeting.title}`,
+          emailText: (user) =>
+            `Dear ${user.name},\n\nYou are invited to a public meeting: ${meeting.title}.\nDate: ${meetingDate}\nLocation: ${meeting.location || 'TBA'}\n\nPlease join us.\n\nBest regards,\nPMCFMS Team`,
+          emailHtml: (user) => `
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+              <h2 style="color: #0d9488;">Public Meeting Invitation</h2>
+              <p>Dear <strong>${user.name}</strong>,</p>
+              <p>You are invited to an upcoming public meeting:</p>
+              <div style="background: #f8fafc; padding: 15px; border-left: 4px solid #0d9488; margin: 20px 0;">
+                <h3 style="margin-top: 0;">${meeting.title}</h3>
+                <p><strong>Date:</strong> ${meetingDate}</p>
+                <p><strong>Time:</strong> ${meeting.startTime || ''} – ${meeting.endTime || ''}</p>
+                <p><strong>Location:</strong> ${meeting.location || 'TBA'}</p>
+              </div>
+              <p>Your voice matters. We hope to see you there!</p>
+              <p style="font-size: 12px; color: #64748b;">PMCFMS</p>
+            </div>
+          `,
+          smsMessage: `PMCFMS: Meeting "${meeting.title}" on ${meetingDay} at ${meeting.location || 'TBA'}. Please join.`,
+          inApp: {
+            type: 'meeting_reminder',
+            title: `Meeting: ${meeting.title}`,
+            message: `You are invited to "${meeting.title}" on ${meetingDate}.`,
+            link: `/dashboard/meetings/${meeting._id}`,
+          },
+        });
+        console.log('✅ Meeting-create notify finished:', result);
+      } catch (err) {
+        console.error('Background meeting-create notify failed:', err);
+      }
+    });
   } catch (error) {
     console.error('❌ Error creating meeting:', error.message);
     res.status(400).json({ success: false, message: error.message });

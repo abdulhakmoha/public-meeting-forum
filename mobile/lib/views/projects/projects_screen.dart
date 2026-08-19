@@ -1357,7 +1357,7 @@ class _DetailsSheet extends StatelessWidget {
                         final showInProgress = st == 'Planning' || st == 'In Progress';
                         final showCompleted = st == 'In Progress';
                         if (st == 'Completed') {
-                          return const Text(
+                          return Text(
                             'Audit complete — project is Completed.',
                             style: TextStyle(color: AppTheme.textSubtle, fontSize: 12, fontStyle: FontStyle.italic),
                           );
