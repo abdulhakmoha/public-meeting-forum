@@ -29,9 +29,9 @@ export default function ForgotPassword() {
       const { data } = await api.post(
         '/auth/forgot-password',
         { email: email.trim().toLowerCase() },
-        { timeout: 45000 }
+        { timeout: 60000 }
       );
-      setSuccess(data.message || 'A 6-digit code was sent to your email.');
+      setSuccess(data.message || 'Check your email for the 6-digit code.');
       setStep('code');
     } catch (err) {
       const msg =
@@ -41,6 +41,29 @@ export default function ForgotPassword() {
             || (err.response ? `Server error ${err.response.status}. Wait a minute and try again.` : null)
             || 'Could not reach the server. Wait 1 minute and try again.';
       setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    if (code.replace(/\D/g, '').length !== 6) {
+      setError('Enter the full 6-digit code');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { data } = await api.post('/auth/verify-reset-code', {
+        email: email.trim().toLowerCase(),
+        code: code.replace(/\D/g, ''),
+      });
+      setSuccess(data.message || 'Code verified.');
+      setStep('password');
+    } catch (err) {
+      setError(err.response?.data?.message || 'That code is incorrect. Try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -67,11 +90,18 @@ export default function ForgotPassword() {
       setSuccess(data.message || 'Password updated. You can sign in now.');
       setTimeout(() => navigate('/login'), 1600);
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not reset password. Try the code again.');
+      setError(err.response?.data?.message || 'Could not reset password. Try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const stepHint =
+    step === 'email'
+      ? 'Step 1 of 3 — Enter your email. We will send a 6-digit code.'
+      : step === 'code'
+        ? 'Step 2 of 3 — Read the code on your phone email (do not tap the email). Type it here on this computer.'
+        : 'Step 3 of 3 — Choose your new password.';
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-4 sm:p-8 bg-[#F4F7F5]">
@@ -90,11 +120,7 @@ export default function ForgotPassword() {
 
         <div className="mb-7">
           <h1 className="font-display text-3xl text-slate-900 tracking-tight mb-2">Forgot password</h1>
-          <p className="text-slate-600">
-            {step === 'email'
-              ? 'Enter your email. We will send a 6-digit code. Stay on this computer and type the code here.'
-              : 'Read the 6-digit code from your phone email. Do not tap the email. Type the code here on this computer.'}
-          </p>
+          <p className="text-slate-600">{stepHint}</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/50 p-6 sm:p-8">
@@ -109,7 +135,7 @@ export default function ForgotPassword() {
             </div>
           )}
 
-          {step === 'email' ? (
+          {step === 'email' && (
             <form className="space-y-5" onSubmit={handleSendCode}>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address</label>
@@ -137,11 +163,13 @@ export default function ForgotPassword() {
                     : 'bg-teal-600 hover:bg-teal-500 hover:-translate-y-0.5 shadow-lg shadow-teal-600/25'
                 }`}
               >
-                {isSubmitting ? 'Sending...' : 'Send code'} <ArrowRight size={18} />
+                {isSubmitting ? 'Sending code...' : 'Send code'} <ArrowRight size={18} />
               </button>
             </form>
-          ) : (
-            <form className="space-y-5" onSubmit={handleResetWithCode}>
+          )}
+
+          {step === 'code' && (
+            <form className="space-y-5" onSubmit={handleVerifyCode}>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">6-digit code</label>
                 <input
@@ -152,11 +180,50 @@ export default function ForgotPassword() {
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
+                  autoFocus
                   className="block w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 tracking-[0.4em] text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all"
                   placeholder="000000"
                 />
               </div>
 
+              <button
+                type="submit"
+                disabled={isSubmitting || code.length !== 6}
+                className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-white rounded-xl font-bold transition-all ${
+                  isSubmitting || code.length !== 6
+                    ? 'bg-teal-400 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-500 hover:-translate-y-0.5 shadow-lg shadow-teal-600/25'
+                }`}
+              >
+                {isSubmitting ? 'Checking...' : 'Verify code'} <ArrowRight size={18} />
+              </button>
+
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSendCode}
+                className="w-full text-sm font-medium text-teal-700 hover:text-teal-600"
+              >
+                Resend code
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('email');
+                  setCode('');
+                  setError('');
+                  setSuccess('');
+                }}
+                className="w-full text-sm font-medium text-slate-500 hover:text-teal-700"
+              >
+                Use a different email
+              </button>
+            </form>
+          )}
+
+          {step === 'password' && (
+            <form className="space-y-5" onSubmit={handleResetWithCode}>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">New password</label>
                 <div className="relative">
@@ -169,6 +236,7 @@ export default function ForgotPassword() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
+                    autoFocus
                     className="block w-full pl-11 pr-11 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all"
                     placeholder="At least 6 characters"
                   />
@@ -203,9 +271,9 @@ export default function ForgotPassword() {
 
               <button
                 type="submit"
-                disabled={isSubmitting || code.length !== 6}
+                disabled={isSubmitting}
                 className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-white rounded-xl font-bold transition-all ${
-                  isSubmitting || code.length !== 6
+                  isSubmitting
                     ? 'bg-teal-400 cursor-not-allowed'
                     : 'bg-teal-600 hover:bg-teal-500 hover:-translate-y-0.5 shadow-lg shadow-teal-600/25'
                 }`}
@@ -216,8 +284,7 @@ export default function ForgotPassword() {
               <button
                 type="button"
                 onClick={() => {
-                  setStep('email');
-                  setCode('');
+                  setStep('code');
                   setPassword('');
                   setConfirm('');
                   setError('');
@@ -225,7 +292,7 @@ export default function ForgotPassword() {
                 }}
                 className="w-full text-sm font-medium text-slate-500 hover:text-teal-700"
               >
-                Use a different email
+                Back to code step
               </button>
             </form>
           )}

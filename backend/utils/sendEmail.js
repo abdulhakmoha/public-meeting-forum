@@ -97,11 +97,8 @@ const sendEmail = async (options) => {
   const from = `"${fromName}" <${user}>`;
 
   try {
-    if (!verified) {
-      // Do not block the HTTP request with verify+retry; just send.
-      transporter = getTransporter();
-    }
-    const info = await getTransporter().sendMail({
+    transporter = getTransporter();
+    const info = await transporter.sendMail({
       from,
       to: options.email,
       subject: options.subject,
@@ -114,8 +111,25 @@ const sendEmail = async (options) => {
     transporter = null;
     verified = false;
     lastError = err.message || String(err);
-    console.error(`Email FAIL → ${options.email}:`, lastError);
-    throw err;
+
+    const altPort = smtpConfig().port === 465 ? 587 : 465;
+    try {
+      transporter = createTransporter(altPort);
+      const info = await transporter.sendMail({
+        from,
+        to: options.email,
+        subject: options.subject,
+        text: options.message,
+        html: options.html,
+      });
+      console.log(`Email OK (port ${altPort}) → ${options.email} (${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (retryErr) {
+      transporter = null;
+      lastError = retryErr.message || lastError;
+      console.error(`Email FAIL → ${options.email}:`, lastError);
+      throw retryErr;
+    }
   }
 };
 

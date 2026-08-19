@@ -166,21 +166,18 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    res.json({ message: okMessage, codeSent: true });
-
     const toEmail = user.email;
     const codeForMail = resetCode;
-    setImmediate(async () => {
-      try {
-        await sendEmail({
-          email: toEmail,
-          subject: `${codeForMail} is your PMCFMS reset code`,
-          message: `Your PMCFMS password reset code is: ${codeForMail}
+    try {
+      await sendEmail({
+        email: toEmail,
+        subject: `${codeForMail} is your PMCFMS reset code`,
+        message: `Your PMCFMS password reset code is: ${codeForMail}
 
 Stay on your computer. Type this code on the website. Do NOT tap any link on your phone.
 
 The code expires in 1 hour. If you did not request this, ignore this email.`,
-          html: `
+        html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
             <h2 style="color:#0d9488;margin:0 0 12px;">Your PMCFMS reset code</h2>
             <p style="font-size:16px;line-height:1.5;">
@@ -196,13 +193,25 @@ The code expires in 1 hour. If you did not request this, ignore this email.`,
             <p style="font-size:13px;color:#64748b;margin-top:20px;">This code expires in 1 hour. If you did not request a reset, ignore this email.</p>
           </div>
         `,
-        });
-        console.log(`Forgot-password code emailed to ${toEmail}`);
-      } catch (mailErr) {
-        console.error('Forgot password email failed:', mailErr.message || mailErr);
-      }
-    });
-    return;
+      });
+      console.log(`Forgot-password code emailed to ${toEmail}`);
+      return res.json({ message: okMessage, codeSent: true });
+    } catch (mailErr) {
+      console.error('Forgot password email failed:', mailErr.message || mailErr);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordCode = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
+      return res.status(502).json({
+        message:
+          lastError.includes('Invalid login') || lastError.includes('EAUTH')
+            ? 'Gmail rejected the login. On Render, SMTP_PASSWORD must be the 16-letter Gmail App Password (no spaces).'
+            : lastError.includes('timeout') || lastError.includes('ETIMEDOUT') || lastError.includes('ECONNECTION')
+              ? 'The server could not reach Gmail. Wait a minute and try again.'
+              : `Could not send the reset email. ${lastError || 'Check SMTP settings and try again.'}`,
+      });
+    }
   } catch (error) {
     console.error(error);
     if (!res.headersSent) {
@@ -245,6 +254,44 @@ exports.resetPassword = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during password reset' });
+  }
+};
+
+// @desc    Check 6-digit reset code before showing new-password step
+// @route   POST /api/auth/verify-reset-code
+// @access  Public
+exports.verifyResetCode = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const code = String(req.body.code || '').replace(/\D/g, '');
+
+    if (!email || code.length !== 6) {
+      return res.status(400).json({ message: 'Enter the 6-digit code from your email' });
+    }
+
+    const user = await findUserByEmail(email);
+    if (!user || !user.resetPasswordCode || !user.resetPasswordExpire || user.resetPasswordExpire < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired code. Request a new one.' });
+    }
+
+    if ((user.resetPasswordAttempts || 0) >= 5) {
+      return res.status(429).json({ message: 'Too many attempts. Request a new code.' });
+    }
+
+    const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
+    if (user.resetPasswordCode !== hashedCode) {
+      user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      return res.status(400).json({ message: 'That code is incorrect. Check your email and try again.' });
+    }
+
+    user.resetPasswordAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({ message: 'Code verified. Choose your new password below.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error during code verification' });
   }
 };
 
