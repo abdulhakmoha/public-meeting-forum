@@ -34,6 +34,12 @@ async function getTabaarakToken() {
   return token;
 }
 
+function isSmsConfigured() {
+  const name = process.env.TABAARAK_SMS_USER || process.env.SOMALI_SMS_USER;
+  const password = process.env.TABAARAK_SMS_PASS || process.env.SOMALI_SMS_PASS;
+  return !!(name && password);
+}
+
 const sendSMS = async (phoneNumber, message) => {
   const name = process.env.TABAARAK_SMS_USER || process.env.SOMALI_SMS_USER;
   const password = process.env.TABAARAK_SMS_PASS || process.env.SOMALI_SMS_PASS;
@@ -72,3 +78,4 @@ const sendSMS = async (phoneNumber, message) => {
 };
 
 module.exports = sendSMS;
+module.exports.isConfigured = isSmsConfigured;

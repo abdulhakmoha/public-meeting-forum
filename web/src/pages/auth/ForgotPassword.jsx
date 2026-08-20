@@ -31,7 +31,7 @@ export default function ForgotPassword() {
         { email: email.trim().toLowerCase() },
         { timeout: 60000 }
       );
-      setSuccess(data.message || 'Check your email for the 6-digit code.');
+      setSuccess(data.message || 'Check your phone for the 6-digit SMS code.');
       setStep('code');
     } catch (err) {
       const msg =
@@ -98,9 +98,9 @@ export default function ForgotPassword() {
 
   const stepHint =
     step === 'email'
-      ? 'Step 1 of 3 — Enter your email. We will send a 6-digit code.'
+      ? 'Step 1 of 3 — Enter your email. We will send a 6-digit code to your phone (SMS).'
       : step === 'code'
-        ? 'Step 2 of 3 — Read the code on your phone email (do not tap the email). Type it here on this computer.'
+        ? 'Step 2 of 3 — Check SMS on your phone. Type the 6-digit code here on this computer.'
         : 'Step 3 of 3 — Choose your new password.';
 
   return (

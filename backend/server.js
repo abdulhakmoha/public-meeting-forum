@@ -100,10 +100,12 @@ app.get('/reset-password/:token', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   const sendEmail = require('./utils/sendEmail');
+  const sendSMS = require('./utils/sendSMS');
   res.json({
     ok: true,
     email: sendEmail.isEmailConfigured(),
     provider: sendEmail.emailProvider(),
+    sms: sendSMS.isConfigured && sendSMS.isConfigured(),
   });
 });
 

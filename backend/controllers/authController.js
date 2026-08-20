@@ -3,6 +3,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
+const sendSMS = require('../utils/sendSMS');
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -123,7 +124,13 @@ exports.login = async (req, res) => {
   }
 };
 
-// @desc    Request password reset email
+function maskPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 4) return 'your phone';
+  return `***${digits.slice(-4)}`;
+}
+
+// @desc    Request password reset code (SMS first — works on Render free tier; email if available)
 // @route   POST /api/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res) => {
@@ -134,7 +141,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const okMessage =
-      'A 6-digit code is on the way. Stay on this computer. Wait a few seconds, read the code from your phone email, and type it here. Do not tap the email.';
+      'If an account exists, a 6-digit code is on the way. Stay on this computer, read the code on your phone, and type it here.';
 
     const user = await findUserByEmail(email);
     if (!user) {
@@ -153,60 +160,98 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    const smtpReady = sendEmail.isEmailConfigured();
-    if (!smtpReady) {
-      console.error('Forgot-password blocked: no BREVO_API_KEY or SMTP credentials');
+    const smsReady = sendSMS.isConfigured && sendSMS.isConfigured();
+    const emailReady = sendEmail.isEmailConfigured();
+    const phone = String(user.phone || '').trim();
+
+    if (!smsReady && !emailReady) {
       user.resetPasswordToken = undefined;
       user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       return res.status(503).json({
-        message:
-          'Email not configured on server. Run node scripts/gmail-setup.js and add GMAIL_REFRESH_TOKEN to Render.',
+        message: 'Password reset is not configured on the server. Contact support.',
       });
     }
 
-    const toEmail = user.email;
-    const codeForMail = resetCode;
-    try {
-      await sendEmail({
-        email: toEmail,
-        subject: `${codeForMail} is your PMCFMS reset code`,
-        message: `Your PMCFMS password reset code is: ${codeForMail}
+    const codeForDelivery = resetCode;
+    const smsText = `PMCFMS password reset code: ${codeForDelivery}. Valid 1 hour. Type this on the website. Do not share.`;
+    let sentViaSms = false;
+    let sentViaEmail = false;
+    let lastDeliveryError = '';
 
-Stay on your computer. Type this code on the website. Do NOT tap any link on your phone.
+    if (smsReady && phone) {
+      const smsResult = await sendSMS(phone, smsText);
+      if (smsResult?.success !== false) {
+        sentViaSms = true;
+        console.log(`Forgot-password code SMS → ${maskPhone(phone)}`);
+      } else {
+        lastDeliveryError = String(smsResult?.error || 'SMS send failed');
+        console.error('Forgot password SMS failed:', lastDeliveryError);
+      }
+    }
+
+    if (emailReady) {
+      try {
+        await sendEmail({
+          email: user.email,
+          subject: `${codeForDelivery} is your PMCFMS reset code`,
+          message: `Your PMCFMS password reset code is: ${codeForDelivery}
+
+Stay on your computer. Type this code on the website.
 
 The code expires in 1 hour. If you did not request this, ignore this email.`,
-        html: `
+          html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
             <h2 style="color:#0d9488;margin:0 0 12px;">Your PMCFMS reset code</h2>
             <p style="font-size:16px;line-height:1.5;">
               You are resetting your password on the <strong>computer website</strong>.
-              Look at this code on your phone, then go back to the computer and type it there.
-            </p>
-            <p style="font-size:16px;font-weight:700;color:#b45309;margin:8px 0 20px;">
-              Do not tap a link on your phone. Do not open this in the phone browser.
+              Look at this code on your phone, then type it on the computer.
             </p>
             <p style="font-size:36px;letter-spacing:8px;font-weight:800;text-align:center;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:18px 12px;color:#134e4a;">
-              ${codeForMail}
+              ${codeForDelivery}
             </p>
-            <p style="font-size:13px;color:#64748b;margin-top:20px;">This code expires in 1 hour. If you did not request a reset, ignore this email.</p>
+            <p style="font-size:13px;color:#64748b;margin-top:20px;">This code expires in 1 hour.</p>
           </div>
         `,
-      });
-      console.log(`Forgot-password code emailed to ${toEmail}`);
-      return res.json({ message: okMessage, codeSent: true });
-    } catch (mailErr) {
-      console.error('Forgot password email failed:', mailErr.message || mailErr);
+        });
+        sentViaEmail = true;
+        console.log(`Forgot-password code emailed to ${user.email}`);
+      } catch (mailErr) {
+        lastDeliveryError = String(mailErr.message || sendEmail.lastError?.() || 'Email send failed');
+        console.error('Forgot password email failed:', lastDeliveryError);
+      }
+    }
+
+    if (!sentViaSms && !sentViaEmail) {
       user.resetPasswordToken = undefined;
       user.resetPasswordCode = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
-      const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
+
+      if (!phone && smsReady) {
+        return res.status(400).json({
+          message:
+            'This account has no phone number on file. Add your phone in profile or contact support.',
+        });
+      }
+
       return res.status(502).json({
-        message: lastError || 'Could not send the reset email. Check email settings on Render.',
+        message: lastDeliveryError || 'Could not send the reset code. Try again in a minute.',
       });
     }
+
+    let message = okMessage;
+    if (sentViaSms && sentViaEmail) {
+      message = `Code sent to your phone (${maskPhone(phone)}) and email. Read it on your phone, type it here on the computer.`;
+    } else if (sentViaSms) {
+      message = `Code sent to your phone (${maskPhone(phone)}). Check SMS on your phone, then type the 6-digit code here on the computer.`;
+    } else {
+      message =
+        'A 6-digit code was sent to your email. Read it on your phone, then type it here on the computer.';
+    }
+
+    return res.json({ message, codeSent: true, channel: sentViaSms ? 'sms' : 'email' });
   } catch (error) {
     console.error(error);
     if (!res.headersSent) {
