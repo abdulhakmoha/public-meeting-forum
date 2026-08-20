@@ -2,6 +2,7 @@ const dns = require('dns');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const { isGmailApiConfigured, sendViaGmailApi } = require('./gmailApi');
+const { isGasEmailConfigured, sendViaGoogleAppsScript } = require('./googleAppsScriptEmail');
 
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -28,6 +29,7 @@ function mailConfig() {
 
 function emailProvider() {
   if (isGmailApiConfigured()) return 'gmail-api';
+  if (isGasEmailConfigured()) return 'google-apps-script';
   if (mailConfig().brevoKey) return 'brevo';
   if (mailConfig().user && mailConfig().pass) return 'smtp';
   return 'none';
@@ -149,6 +151,10 @@ async function verifySmtp() {
     console.log('✅ Email via Gmail API (HTTPS — works on Render free tier, same Gmail account)');
     return true;
   }
+  if (provider === 'google-apps-script') {
+    console.log('✅ Email via Google Apps Script (HTTPS — simple Gmail bridge for Render free tier)');
+    return true;
+  }
   if (provider === 'brevo') {
     console.log('✅ Email via Brevo API');
     return true;
@@ -182,6 +188,9 @@ const sendEmail = async (options) => {
     if (provider === 'gmail-api') {
       return await sendViaGmailApi(options);
     }
+    if (provider === 'google-apps-script') {
+      return await sendViaGoogleAppsScript(options);
+    }
     if (provider === 'brevo') {
       return await sendViaBrevo(options);
     }
@@ -200,5 +209,6 @@ sendEmail.lastError = () => lastError;
 sendEmail.emailProvider = emailProvider;
 sendEmail.usesBrevo = () => emailProvider() === 'brevo';
 sendEmail.usesGmailApi = () => emailProvider() === 'gmail-api';
+sendEmail.usesGoogleAppsScript = () => emailProvider() === 'google-apps-script';
 
 module.exports = sendEmail;
