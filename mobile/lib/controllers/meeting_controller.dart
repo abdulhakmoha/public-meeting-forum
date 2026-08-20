@@ -78,11 +78,16 @@ class MeetingController extends GetxController {
         await fetchMeetingDetails(meetingId);
         AppNotification.success('Joined!', 'You have joined the meeting');
         return true;
-      } else {
-        final data = jsonDecode(response.body);
-        AppNotification.error(data['message'] ?? 'Failed to join');
-        return false;
       }
+      final data = jsonDecode(response.body);
+      final message = data['message']?.toString() ?? '';
+      if (response.statusCode == 400 &&
+          message.toLowerCase().contains('already joined')) {
+        await fetchMeetingDetails(meetingId);
+        return true;
+      }
+      AppNotification.error(message.isNotEmpty ? message : 'Failed to join');
+      return false;
     } catch (e) {
       AppNotification.error('Could not connect to server');
       return false;

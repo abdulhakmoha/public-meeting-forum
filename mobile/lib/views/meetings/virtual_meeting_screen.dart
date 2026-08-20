@@ -1,21 +1,29 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:jitsi_meet_wrapper/jitsi_meet_wrapper.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+
 import '../../controllers/auth_controller.dart';
 import '../../utils/meeting_resume_store.dart';
 import '../../utils/theme.dart';
 
+/// In-app Jitsi via WebView (same server as website). Avoids native SDK crashes.
 class VirtualMeetingScreen extends StatefulWidget {
   final String? meetingId;
   final String? meetingTitle;
   final String? roomName;
+  final bool autoJoin;
 
   const VirtualMeetingScreen({
     Key? key,
     this.meetingId,
     this.meetingTitle,
     this.roomName,
+    this.autoJoin = true,
   }) : super(key: key);
 
   @override
@@ -24,249 +32,232 @@ class VirtualMeetingScreen extends StatefulWidget {
 
 class _VirtualMeetingScreenState extends State<VirtualMeetingScreen> {
   final AuthController authCtrl = Get.find<AuthController>();
-  late TextEditingController _roomCtrl;
-  bool _audioEnabled = true;
-  bool _videoEnabled = true;
-  bool _joining = false;
+  WebViewController? _controller;
+  bool _loading = true;
+  String? _error;
+  double _progress = 0;
 
-  String get _defaultRoom {
-    if (widget.roomName != null && widget.roomName!.trim().isNotEmpty) {
-      return widget.roomName!.trim();
-    }
+  String get _room {
+    final fromWidget = widget.roomName?.trim();
+    if (fromWidget != null && fromWidget.isNotEmpty) return fromWidget;
     if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
       return 'PMCFMS-Meeting-${widget.meetingId}';
     }
     return 'PMCFMS-Meeting-${DateTime.now().millisecondsSinceEpoch}';
   }
 
+  String get _displayName => authCtrl.user['name']?.toString().trim().isNotEmpty == true
+      ? authCtrl.user['name'].toString().trim()
+      : 'PMCFMS User';
+
+  Uri _jitsiUri(String room) {
+    final encodedRoom = Uri.encodeComponent(room);
+    final encodedName = Uri.encodeComponent(_displayName);
+    // Match website: belnet.be + stable room + skip prejoin
+    return Uri.parse(
+      'https://jitsi.belnet.be/$encodedRoom'
+      '#config.prejoinPageEnabled=false'
+      '&config.startWithAudioMuted=true'
+      '&config.disableDeepLinking=true'
+      '&config.enableWelcomePage=false'
+      '&userInfo.displayName=$encodedName',
+    );
+  }
+
+  Uri _browserUrl(String room) => _jitsiUri(room);
+
   @override
   void initState() {
     super.initState();
-    _roomCtrl = TextEditingController(text: _defaultRoom);
-    // Persist so Android Activity recreate after Jitsi returns to meeting, not blank dashboard
     if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
       MeetingResumeStore.save(widget.meetingId!, openVirtual: true);
     }
-  }
-
-  @override
-  void dispose() {
-    _roomCtrl.dispose();
-    super.dispose();
-  }
-
-  Uri _browserUrl(String room) {
-    final clean = room.replaceAll(RegExp(r'^https?://[^/]+/'), '');
-    return Uri.parse('https://jitsi.belnet.be/${Uri.encodeComponent(clean)}');
-  }
-
-  Future<void> _openInBrowser(String room) async {
-    final url = _browserUrl(room);
-    final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
-      Get.snackbar('Error', 'Could not open browser for the meeting link');
+    if (widget.autoJoin) {
+      _startMeeting();
     }
   }
 
-  Future<void> _joinMeeting({bool preferBrowser = false}) async {
-    final room = _roomCtrl.text.trim();
-    if (room.isEmpty) {
-      Get.snackbar('Error', 'Room name is required');
-      return;
+  Future<void> _ensureAvPermissions() async {
+    final cam = await Permission.camera.request();
+    final mic = await Permission.microphone.request();
+    if (Platform.isAndroid) {
+      await Permission.bluetoothConnect.request();
     }
-
-    if (widget.meetingId != null && widget.meetingId!.isNotEmpty) {
-      await MeetingResumeStore.save(widget.meetingId!, openVirtual: true);
+    if (!cam.isGranted || !mic.isGranted) {
+      throw Exception('Camera and microphone permission are required for video meetings.');
     }
+  }
 
-    setState(() => _joining = true);
-    final userName = authCtrl.user['name'] ?? 'User';
-    final userEmail = authCtrl.user['email'] ?? '';
+  Future<void> _startMeeting() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _progress = 0;
+    });
 
     try {
-      if (preferBrowser) {
-        await _openInBrowser(room);
-        return;
-      }
+      await _ensureAvPermissions();
+      final room = _room;
+      final url = _jitsiUri(room);
 
-      final options = JitsiMeetingOptions(
-        roomNameOrUrl: room,
-        serverUrl: 'https://jitsi.belnet.be',
-        subject: widget.meetingTitle ?? 'Virtual Meeting',
-        isAudioMuted: !_audioEnabled,
-        isVideoMuted: !_videoEnabled,
-        userDisplayName: userName,
-        userEmail: userEmail,
-      );
-
-      await JitsiMeetWrapper.joinMeeting(options: options);
-    } catch (error) {
-      debugPrint('Jitsi join error: $error');
-      // Native SDK often crashes / recreates Activity — fall back to browser
-      await _openInBrowser(room);
-      if (mounted) {
-        Get.snackbar(
-          'Opened in browser',
-          'In-app video failed; joining via browser instead.',
-          snackPosition: SnackPosition.BOTTOM,
+      final controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.black)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p / 100);
+            },
+            onPageStarted: (_) {
+              if (mounted) setState(() => _loading = true);
+            },
+            onPageFinished: (_) {
+              if (mounted) setState(() => _loading = false);
+            },
+            onWebResourceError: (err) {
+              if (mounted) {
+                setState(() {
+                  _error = err.description.isNotEmpty ? err.description : 'Could not load meeting room';
+                  _loading = false;
+                });
+              }
+            },
+          ),
         );
+
+      if (Platform.isAndroid && controller.platform is AndroidWebViewController) {
+        final android = controller.platform as AndroidWebViewController;
+        android.setMediaPlaybackRequiresUserGesture(false);
+        android.setOnPlatformPermissionRequest((request) => request.grant());
       }
-    } finally {
-      if (mounted) setState(() => _joining = false);
+
+      await controller.loadRequest(url);
+
+      if (!mounted) return;
+      setState(() {
+        _controller = controller;
+        _loading = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _openInBrowser() async {
+    final ok = await launchUrl(_browserUrl(_room), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      Get.snackbar('Error', 'Could not open browser for the meeting');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(title: const Text('Virtual Meeting')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF065F46), Color(0xFF10B981)]),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.videocam, color: Colors.white, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Video Conference',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Powered by Jitsi Meet',
-                          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
-                        ),
-                        if (widget.meetingTitle != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.meetingTitle!,
-                            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text('Room Name', style: TextStyle(color: AppTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _roomCtrl,
-              readOnly: widget.meetingId != null,
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Meeting room',
-                hintStyle: TextStyle(color: AppTheme.textSubtle),
-                prefixIcon: Icon(Icons.meeting_room_outlined, color: AppTheme.textSubtle, size: 20),
-                filled: true,
-                fillColor: AppTheme.surfaceColor,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderColor),
-              ),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(widget.meetingTitle ?? 'Virtual Meeting'),
+        backgroundColor: const Color(0xFF065F46),
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Open in browser',
+            onPressed: _openInBrowser,
+            icon: const Icon(Icons.open_in_browser),
+          ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_error != null) {
+      return _messagePanel(
+        icon: Icons.error_outline,
+        title: 'Could not join meeting',
+        message: _error!,
+        primaryLabel: 'Try again',
+        onPrimary: _startMeeting,
+        secondaryLabel: 'Open in browser',
+        onSecondary: _openInBrowser,
+      );
+    }
+
+    if (_controller == null) {
+      return _messagePanel(
+        icon: Icons.videocam_outlined,
+        title: widget.meetingTitle ?? 'Virtual Meeting',
+        message: 'Room: $_room\n\nTap below to join with camera and microphone.',
+        primaryLabel: 'Join meeting',
+        onPrimary: _startMeeting,
+        secondaryLabel: 'Open in browser',
+        onSecondary: _openInBrowser,
+      );
+    }
+
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller!),
+        if (_loading)
+          Container(
+            color: Colors.black87,
+            child: Center(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _toggleRow('Enable Audio', Icons.mic_outlined, _audioEnabled, (v) => setState(() => _audioEnabled = v)),
-                  Divider(height: 20, color: AppTheme.borderColor),
-                  _toggleRow('Enable Video', Icons.videocam_outlined, _videoEnabled, (v) => setState(() => _videoEnabled = v)),
+                  const CircularProgressIndicator(color: AppTheme.primaryColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    _progress > 0 ? 'Loading meeting… ${(_progress * 100).round()}%' : 'Connecting to meeting…',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: _joining ? null : () => _joinMeeting(),
-                icon: _joining
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.videocam, color: Colors.white),
-                label: Text(
-                  _joining ? 'Joining...' : 'Join Meeting',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 4,
-                ),
-              ),
-            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _messagePanel({
+    required IconData icon,
+    required String title,
+    required String message,
+    required String primaryLabel,
+    required VoidCallback onPrimary,
+    required String secondaryLabel,
+    required VoidCallback onSecondary,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 48, color: AppTheme.primaryColor),
+            const SizedBox(height: 16),
+            Text(title, textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textMuted, height: 1.5)),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: OutlinedButton.icon(
-                onPressed: _joining ? null : () => _joinMeeting(preferBrowser: true),
-                icon: const Icon(Icons.open_in_browser),
-                label: const Text('Join in Browser (recommended)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.primaryColor,
-                  side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
+              child: ElevatedButton(onPressed: onPrimary, child: Text(primaryLabel)),
             ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                'Same room as the website: ${_roomCtrl.text}',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textSubtle, fontSize: 11),
-              ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(onPressed: onSecondary, child: Text(secondaryLabel)),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _toggleRow(String label, IconData icon, bool value, ValueChanged<bool> onChanged) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: value ? AppTheme.primaryColor : AppTheme.textSubtle),
-        const SizedBox(width: 10),
-        Expanded(child: Text(label, style: TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
-        Switch(
-          value: value,
-          activeColor: AppTheme.primaryColor,
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 }

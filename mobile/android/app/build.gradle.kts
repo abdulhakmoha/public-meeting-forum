@@ -23,8 +23,8 @@ android {
         applicationId = "com.abdulhakmoha.pmcfms"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 4
+        versionName = "1.0.3"
     }
 
     buildTypes {
