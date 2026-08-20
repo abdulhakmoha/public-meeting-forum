@@ -162,7 +162,7 @@ exports.forgotPassword = async (req, res) => {
       await user.save({ validateBeforeSave: false });
       return res.status(503).json({
         message:
-          'Email is not configured. On Render add BREVO_API_KEY (brevo.com, free) or upgrade for Gmail SMTP.',
+          'Email not configured on server. Run node scripts/gmail-setup.js and add GMAIL_REFRESH_TOKEN to Render.',
       });
     }
 
@@ -204,13 +204,7 @@ The code expires in 1 hour. If you did not request this, ignore this email.`,
       await user.save({ validateBeforeSave: false });
       const lastError = String(mailErr.message || sendEmail.lastError?.() || '');
       return res.status(502).json({
-        message: lastError.includes('Render free tier')
-          ? lastError
-          : lastError.includes('Invalid login') || lastError.includes('EAUTH')
-            ? 'Gmail rejected the login. Use a 16-letter Gmail App Password, or add BREVO_API_KEY on Render.'
-            : lastError.includes('timeout') || lastError.includes('ETIMEDOUT') || lastError.includes('ECONNECTION')
-              ? 'Render free tier blocks Gmail SMTP. Add BREVO_API_KEY in Render Environment (free at brevo.com).'
-              : `Could not send the reset email. ${lastError || 'Check email settings and try again.'}`,
+        message: lastError || 'Could not send the reset email. Check email settings on Render.',
       });
     }
   } catch (error) {

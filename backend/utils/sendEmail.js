@@ -1,6 +1,7 @@
 const dns = require('dns');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const { isGmailApiConfigured, sendViaGmailApi } = require('./gmailApi');
 
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -25,18 +26,19 @@ function mailConfig() {
   return { host, user, pass, port, fromEmail, fromName, brevoKey };
 }
 
-/** True when Brevo API or Gmail SMTP credentials exist. */
+function emailProvider() {
+  if (isGmailApiConfigured()) return 'gmail-api';
+  if (mailConfig().brevoKey) return 'brevo';
+  if (mailConfig().user && mailConfig().pass) return 'smtp';
+  return 'none';
+}
+
 function isEmailConfigured() {
-  const { user, pass, brevoKey } = mailConfig();
-  return !!(brevoKey || (user && pass));
+  return emailProvider() !== 'none';
 }
 
 function isSmtpConfigured() {
   return isEmailConfigured();
-}
-
-function usesBrevo() {
-  return !!mailConfig().brevoKey;
 }
 
 let lastError = '';
@@ -117,7 +119,7 @@ async function sendViaSmtp(options) {
   throw lastErr || new Error('SMTP send failed');
 }
 
-function renderSmtpBlockedMessage(err) {
+function renderErrorMessage(err) {
   const msg = String(err?.message || err || '');
   if (
     msg.includes('ETIMEDOUT') ||
@@ -127,56 +129,67 @@ function renderSmtpBlockedMessage(err) {
     msg.includes('timeout')
   ) {
     return (
-      'Render free tier blocks Gmail SMTP. Add BREVO_API_KEY in Render Environment ' +
-      '(free at brevo.com — verify your Gmail as sender). Local dev can still use Gmail SMTP.'
+      'Render free tier blocks Gmail SMTP (ports 587/465). ' +
+      'Use Gmail API instead: run `node scripts/gmail-setup.js` locally, then add GMAIL_REFRESH_TOKEN to Render. ' +
+      'No Brevo account needed.'
     );
   }
   if (msg.includes('Invalid login') || msg.includes('EAUTH')) {
-    return 'Gmail rejected the login. Use a 16-letter Gmail App Password in SMTP_PASSWORD.';
+    return 'Gmail login failed. For local dev use App Password in SMTP_PASSWORD. For Render use Gmail API (see gmail-setup.js).';
+  }
+  if (msg.includes('invalid_grant')) {
+    return 'Gmail refresh token expired. Run `node scripts/gmail-setup.js` again and update GMAIL_REFRESH_TOKEN on Render.';
   }
   return msg || 'Email could not be sent.';
 }
 
 async function verifySmtp() {
-  if (usesBrevo()) {
-    console.log('✅ Email via Brevo API (HTTPS — works on Render free tier)');
+  const provider = emailProvider();
+  if (provider === 'gmail-api') {
+    console.log('✅ Email via Gmail API (HTTPS — works on Render free tier, same Gmail account)');
     return true;
   }
-  if (!mailConfig().user || !mailConfig().pass) {
-    lastError = 'SMTP_EMAIL or SMTP_PASSWORD missing';
-    return false;
-  }
-  try {
-    transporter = createTransporter(587);
-    await transporter.verify();
-    console.log(`✅ Gmail SMTP ready (${mailConfig().user})`);
+  if (provider === 'brevo') {
+    console.log('✅ Email via Brevo API');
     return true;
-  } catch (err) {
-    lastError = renderSmtpBlockedMessage(err);
-    console.error('❌ SMTP verify failed:', lastError);
-    return false;
   }
+  if (provider === 'smtp') {
+    try {
+      transporter = createTransporter(587);
+      await transporter.verify();
+      console.log(`✅ Gmail SMTP ready (${mailConfig().user}) — local dev only`);
+      return true;
+    } catch (err) {
+      lastError = renderErrorMessage(err);
+      console.error('❌ SMTP verify failed:', lastError);
+      return false;
+    }
+  }
+  lastError = 'No email provider configured';
+  return false;
 }
 
 const sendEmail = async (options) => {
   if (!isEmailConfigured()) {
-    console.log('--- MOCK EMAIL (no BREVO_API_KEY or SMTP configured) ---');
+    console.log('--- MOCK EMAIL (configure Gmail API or SMTP) ---');
     console.log(`To: ${options.email}`);
     console.log(`Subject: ${options.subject}`);
     return { success: true, mocked: true };
   }
 
   try {
-    if (usesBrevo()) {
+    const provider = emailProvider();
+    if (provider === 'gmail-api') {
+      return await sendViaGmailApi(options);
+    }
+    if (provider === 'brevo') {
       return await sendViaBrevo(options);
     }
     return await sendViaSmtp(options);
   } catch (err) {
-    lastError = renderSmtpBlockedMessage(err);
+    lastError = renderErrorMessage(err);
     console.error(`Email FAIL → ${options.email}:`, lastError);
-    const wrapped = new Error(lastError);
-    wrapped.code = err.code;
-    throw wrapped;
+    throw new Error(lastError);
   }
 };
 
@@ -184,6 +197,8 @@ sendEmail.isSmtpConfigured = isSmtpConfigured;
 sendEmail.isEmailConfigured = isEmailConfigured;
 sendEmail.verifySmtp = verifySmtp;
 sendEmail.lastError = () => lastError;
-sendEmail.usesBrevo = usesBrevo;
+sendEmail.emailProvider = emailProvider;
+sendEmail.usesBrevo = () => emailProvider() === 'brevo';
+sendEmail.usesGmailApi = () => emailProvider() === 'gmail-api';
 
 module.exports = sendEmail;

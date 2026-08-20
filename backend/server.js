@@ -103,7 +103,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     email: sendEmail.isEmailConfigured(),
-    provider: sendEmail.usesBrevo() ? 'brevo' : 'smtp',
+    provider: sendEmail.emailProvider(),
   });
 });
 

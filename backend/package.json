@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "npx nodemon server.js",
-    "seed": "node seeder.js"
+    "seed": "node seeder.js",
+    "gmail-setup": "node scripts/gmail-setup.js"
   },
   "keywords": [],
   "author": "",
