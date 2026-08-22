@@ -9,7 +9,7 @@
       "destination": "https://public-meeting-forum.onrender.com/uploads/:path*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|uploads/).*)",
       "destination": "/index.html"
     }
   ],

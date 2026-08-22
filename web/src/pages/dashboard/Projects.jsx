@@ -8,7 +8,7 @@ import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
 import StatusAudit from '../../components/StatusAudit';
 import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
-import { PROJECT_FLOW, nextProjectStatus, autoProgress } from '../../utils/statusWorkflow';
+import FileOpenViewer, { openBlobInNewTab, downloadHref } from '../../components/FileOpenViewer';
 
 export default function Projects() {
   const { user } = useContext(AuthContext);
@@ -48,20 +48,16 @@ export default function Projects() {
     });
   };
 
-  const openFileInBrowser = (url, mime = '', name = '') => {
+  const openFileInBrowser = async (url, mime = '', name = '') => {
     if (!url) return;
-    const kind = fileKind(url, mime, name);
-    let target = url;
-    if (kind === 'doc') {
-      target = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    try {
+      await openBlobInNewTab(url, mime, name);
+    } catch (err) {
+      alert(err.message || 'Could not open file');
     }
-    window.open(target, '_blank', 'noopener,noreferrer');
   };
 
-  const downloadFileUrl = (url) => {
-    const join = url.includes('?') ? '&' : '?';
-    return `${url}${join}download=1`;
-  };
+  const downloadFileUrl = (url) => downloadHref(url);
 
   const ProjectFilePreview = ({ url, mime = '', name = '', height = 'h-40', rounded = 'rounded-t-3xl', clickable = false, title = 'Document' }) => {
     const kind = fileKind(url, mime, name);
@@ -811,21 +807,12 @@ export default function Projects() {
                 </div>
               </div>
               <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative min-h-0">
-                {fileKind(fileViewer.url, fileViewer.mime, fileViewer.name) === 'image' ? (
-                  <img src={fileViewer.url} alt="" className="w-full h-full object-contain bg-slate-100 dark:bg-slate-950" />
-                ) : fileKind(fileViewer.url, fileViewer.mime, fileViewer.name) === 'doc' ? (
-                  <iframe
-                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileViewer.url)}`}
-                    className="w-full h-full border-0"
-                    title="Office preview"
-                  />
-                ) : (
-                  <iframe
-                    src={fileViewer.url}
-                    className="w-full h-full border-0"
-                    title="File preview"
-                  />
-                )}
+                <FileOpenViewer
+                  url={fileViewer.url}
+                  mime={fileViewer.mime}
+                  name={fileViewer.name}
+                  title={fileViewer.title}
+                />
               </div>
             </motion.div>
           </div>

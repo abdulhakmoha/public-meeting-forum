@@ -71,7 +71,7 @@ app.get('/uploads/:id', async (req, res) => {
       const disposition = forceDownload ? 'attachment' : 'inline';
       res.setHeader('Content-Type', mime || 'application/octet-stream');
       res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(name)}"`);
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cache-Control', 'no-store');
       stream.on('error', () => {
         if (!res.headersSent) res.status(404).end();
       });

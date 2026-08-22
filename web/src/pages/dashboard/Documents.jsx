@@ -5,7 +5,7 @@ import api from '../../services/api';
 import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
-import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
+import FileOpenViewer, { openBlobInNewTab, downloadHref } from '../../components/FileOpenViewer';
 
 export default function Documents() {
   const { user } = useContext(AuthContext);
@@ -309,14 +309,13 @@ export default function Documents() {
                   <span className="truncate">{viewer.title}</span>
                 </h3>
                 <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={viewer.url}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openBlobInNewTab(viewer.url, '', viewer.title).catch((err) => alert(err.message))}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
                   >
-                    <ExternalLink size={12} /> New tab
-                  </a>
+                    <ExternalLink size={12} /> Open
+                  </button>
                   <button
                     type="button"
                     onClick={() => setViewer({ open: false, url: '', title: '' })}
@@ -326,12 +325,8 @@ export default function Documents() {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 bg-slate-100 dark:bg-slate-950">
-                <iframe
-                  src={viewer.url}
-                  className="w-full h-full border-0"
-                  title={viewer.title || 'Document viewer'}
-                />
+              <div className="flex-1 bg-slate-100 dark:bg-slate-950 min-h-0">
+                <FileOpenViewer url={viewer.url} title={viewer.title} name={viewer.title} />
               </div>
             </motion.div>
           </div>
