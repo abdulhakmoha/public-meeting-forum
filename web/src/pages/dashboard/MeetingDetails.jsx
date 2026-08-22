@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Calendar, MapPin, Users, Clock, FileText, CheckCircle, BarChart3, Plus, X, Vote, Trash2, Video, Bell, Edit, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
+import { isMeetingEnded, meetingEndDate, meetingStartDate } from '../../utils/meetingTime';
 
 const D = {
   bg:      'var(--color-bg-elevated)',
@@ -27,7 +28,12 @@ export default function MeetingDetails() {
   const [loading, setLoading] = useState(true);
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] });
-  const [votingId, setVotingId] = useState(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, []);
 
   // Edit / Cancel States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -182,38 +188,11 @@ export default function MeetingDetails() {
   const date = new Date(meeting.date);
   const isJoined = meeting.attendees.some(a => a._id === user?._id);
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
-  const now = new Date();
-
-  const getMeetingEndDate = () => {
-    const end = new Date(meeting.date);
-    let endH = 0, endMin = 0;
-    if (meeting.endTime) {
-      [endH, endMin] = meeting.endTime.split(':').map(Number);
-    }
-    const start = new Date(meeting.date);
-    if (meeting.startTime) {
-      const [h, min] = meeting.startTime.split(':').map(Number);
-      start.setHours(h, min, 0, 0);
-    }
-    end.setHours(endH, endMin, 0, 0);
-    
-    if (end < start) {
-      end.setDate(end.getDate() + 1);
-    }
-    return end;
-  };
-  const getMeetingStartDate = () => {
-    const start = new Date(meeting.date);
-    if (meeting.startTime) {
-      const [h, min] = meeting.startTime.split(':').map(Number);
-      start.setHours(h, min, 0, 0);
-    }
-    return start;
-  };
-  const endDate = getMeetingEndDate();
-  const startDate = getMeetingStartDate();
-  const isStarted = now >= startDate;
-  const isPast = endDate < now && meeting.status !== 'ongoing';
+  const now = new Date(nowTick);
+  const endDate = meetingEndDate(meeting);
+  const startDate = meetingStartDate(meeting);
+  const isStarted = startDate && now >= startDate;
+  const isPast = isMeetingEnded(meeting, now);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
@@ -246,18 +225,19 @@ export default function MeetingDetails() {
       )}
 
       {/* Header Banner */}
-      <div style={{ ...CARD, position: 'relative', overflow: 'hidden' }} className="p-8">
+      <div style={{ ...CARD, position: 'relative', overflow: 'hidden', opacity: isPast ? 0.72 : 1 }} className="p-8">
         <div style={{ position: 'absolute', top: 0, right: 0, width: '200px', height: '200px', background: 'rgba(16,185,129,0.06)', borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none' }} />
 
         <div className="relative z-10 flex flex-col md:flex-row justify-between gap-6">
           <div className="flex-1">
             <div className="flex gap-2 mb-4 flex-wrap">
               <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                isPast ? 'bg-slate-500/15 text-slate-400 border border-slate-500/30' :
                 meeting.status === 'upcoming' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
                 meeting.status === 'ongoing'  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
                 meeting.status === 'cancelled' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' :
                 'bg-slate-500/15 text-slate-400 border border-slate-500/30'
-              }`}>{meeting.status}</span>
+              }`}>{isPast && meeting.status !== 'cancelled' ? 'ENDED' : meeting.status}</span>
               <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
                 {meeting.category || 'General'}
               </span>

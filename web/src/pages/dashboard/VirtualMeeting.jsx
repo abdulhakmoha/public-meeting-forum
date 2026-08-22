@@ -2,6 +2,7 @@ import { useEffect, useContext, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
+import { isMeetingEnded, meetingEndDate } from '../../utils/meetingTime';
 import { ArrowLeft, MessageSquare, Users, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function VirtualMeeting() {
@@ -38,14 +39,7 @@ export default function VirtualMeeting() {
   useEffect(() => {
     if (!meeting || isPast) return;
 
-    const getMeetingEndMs = () => {
-      const end = new Date(meeting.date);
-      if (meeting.endTime) {
-        const [h, min] = meeting.endTime.split(':').map(Number);
-        end.setHours(h, min, 0, 0);
-      }
-      return end.getTime();
-    };
+    const getMeetingEndMs = () => meetingEndDate(meeting)?.getTime() || 0;
 
     const endMs = getMeetingEndMs();
 
@@ -165,15 +159,7 @@ export default function VirtualMeeting() {
       const res = await api.get(`/meetings/${id}`);
       const m = res.data.data;
       setMeeting(m);
-
-      const endDate = new Date(m.date);
-      if (m.endTime) {
-        const [h, min] = m.endTime.split(':').map(Number);
-        endDate.setHours(h, min, 0, 0);
-      }
-      if (endDate < new Date() && m.status !== 'ongoing') {
-        setIsPast(true);
-      }
+      if (isMeetingEnded(m)) setIsPast(true);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching meeting:', error);

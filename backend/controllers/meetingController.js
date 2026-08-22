@@ -1,4 +1,5 @@
 const Meeting = require('../models/Meeting');
+const { isMeetingEnded } = require('../utils/meetingTime');
 
 // @desc    Get all meetings
 // @route   GET /api/meetings
@@ -10,25 +11,8 @@ exports.getMeetings = async (req, res) => {
     const now = new Date();
     const enriched = meetings.map(m => {
       const obj = m.toObject();
-      const meetingDate = new Date(obj.date);
-      const startDate = new Date(obj.date);
-
-      if (obj.startTime) {
-        const [h, min] = obj.startTime.split(':').map(Number);
-        startDate.setHours(h, min, 0, 0);
-      }
-
-      if (obj.endTime) {
-        const [h, min] = obj.endTime.split(':').map(Number);
-        meetingDate.setHours(h, min, 0, 0);
-      }
-
-      if (meetingDate < startDate) {
-        meetingDate.setDate(meetingDate.getDate() + 1);
-      }
-
       if (obj.status !== 'cancelled' && obj.status !== 'ongoing') {
-        obj.status = meetingDate < now ? 'completed' : 'upcoming';
+        obj.status = isMeetingEnded(obj, now) ? 'completed' : 'upcoming';
       }
       return obj;
     });
@@ -52,32 +36,14 @@ exports.getMeeting = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Meeting not found' });
     }
 
-    res.status(200).json({ success: true, data: meeting });
+    const obj = meeting.toObject();
+    if (obj.status !== 'cancelled' && obj.status !== 'ongoing') {
+      obj.status = isMeetingEnded(obj) ? 'completed' : 'upcoming';
+    }
+    res.status(200).json({ success: true, data: obj });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
-};
-
-// Helper to check if a meeting has ended based on date + endTime
-const isMeetingEnded = (meeting) => {
-  const end = new Date(meeting.date);
-  const start = new Date(meeting.date);
-  
-  if (meeting.startTime) {
-    const [startH, startMin] = meeting.startTime.split(':').map(Number);
-    start.setHours(startH, startMin, 0, 0);
-  }
-
-  if (meeting.endTime) {
-    const [endH, endMin] = meeting.endTime.split(':').map(Number);
-    end.setHours(endH, endMin, 0, 0);
-  }
-  
-  if (end < start) {
-    end.setDate(end.getDate() + 1);
-  }
-  
-  return end < new Date();
 };
 
 // @desc    Create new meeting

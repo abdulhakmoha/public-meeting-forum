@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './Calendar.css';
-import useLivePoll from '../../hooks/useLivePoll';
+import { isMeetingEnded as meetingHasEnded } from '../../utils/meetingTime';
 
 export default function Meetings() {
   const { user } = useContext(AuthContext);
@@ -18,7 +18,13 @@ export default function Meetings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState('list');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [joiningId, setJoiningId] = useState(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -115,34 +121,11 @@ export default function Meetings() {
 
   const canCreate = user?.role === 'admin' || user?.role === 'moderator';
 
-  const isMeetingEnded = (m) => {
-    const end = new Date(m.date);
-    let endH = 0, endMin = 0;
-    if (m.endTime) {
-      [endH, endMin] = m.endTime.split(':').map(Number);
-    }
-    
-    const start = new Date(m.date);
-    if (m.startTime) {
-      const [h, min] = m.startTime.split(':').map(Number);
-      start.setHours(h, min, 0, 0);
-    }
-    
-    end.setHours(endH, endMin, 0, 0);
-    
-    // If end time is before start time (e.g. start 21:00, end 02:00), it ends the next day
-    if (end < start) {
-      end.setDate(end.getDate() + 1);
-    }
-    
-    return end < new Date();
-  };
-
   const upcomingMeetings = filteredMeetings.filter(m => {
-    return !isMeetingEnded(m) || m.status === 'ongoing';
+    return !meetingHasEnded(m, new Date(nowTick)) || m.status === 'ongoing';
   });
   const pastMeetings = filteredMeetings.filter(m => {
-    return isMeetingEnded(m) && m.status !== 'ongoing';
+    return meetingHasEnded(m, new Date(nowTick)) && m.status !== 'ongoing';
   });
 
   const getMeetingsForDate = (date) => {

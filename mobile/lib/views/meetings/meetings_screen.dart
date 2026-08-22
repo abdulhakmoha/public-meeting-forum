@@ -24,15 +24,32 @@ class _MeetingsScreenState extends State<MeetingsScreen> {
   bool get _canManage => authCtrl.user['role'] == 'admin' || authCtrl.user['role'] == 'moderator';
 
   bool _isPast(Map meeting) {
-    final date = meeting['date'] != null ? DateTime.tryParse(meeting['date']) : null;
-    if (date == null) return false;
-    final endTime = meeting['endTime'] as String?;
-    if (endTime != null && endTime.contains(':')) {
-      final parts = endTime.split(':');
-      final end = DateTime(date.year, date.month, date.day, int.parse(parts[0]), int.parse(parts[1]));
-      return end.isBefore(DateTime.now());
+    final status = meeting['status']?.toString();
+    if (status == 'ongoing') return false;
+    if (status == 'completed' || status == 'cancelled') return true;
+    final dateStr = meeting['date']?.toString() ?? '';
+    if (dateStr.isEmpty) return false;
+    final parsed = DateTime.tryParse(dateStr);
+    if (parsed == null) return false;
+    final inSomalia = parsed.toUtc().add(const Duration(hours: 3));
+    final y = inSomalia.year.toString().padLeft(4, '0');
+    final mo = inSomalia.month.toString().padLeft(2, '0');
+    final d = inSomalia.day.toString().padLeft(2, '0');
+    final endTime = (meeting['endTime'] as String?) ?? '23:59';
+    final startTime = (meeting['startTime'] as String?) ?? '00:00';
+    final endParts = endTime.split(':');
+    final startParts = startTime.split(':');
+    final eh = (endParts.isNotEmpty ? endParts[0] : '23').padLeft(2, '0');
+    final em = (endParts.length > 1 ? endParts[1] : '00').padLeft(2, '0');
+    final sh = (startParts.isNotEmpty ? startParts[0] : '00').padLeft(2, '0');
+    final sm = (startParts.length > 1 ? startParts[1] : '00').padLeft(2, '0');
+    var end = DateTime.tryParse('${y}-${mo}-${d}T$eh:$em:00+03:00');
+    final start = DateTime.tryParse('${y}-${mo}-${d}T$sh:$sm:00+03:00');
+    if (end == null) return parsed.isBefore(DateTime.now());
+    if (start != null && end.isBefore(start)) {
+      end = end.add(const Duration(days: 1));
     }
-    return date.isBefore(DateTime.now());
+    return end.isBefore(DateTime.now());
   }
 
   List get _filtered {
