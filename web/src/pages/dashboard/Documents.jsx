@@ -6,6 +6,7 @@ import { mediaUrl } from '../../services/mediaUrl';
 import { AuthContext } from '../../context/AuthContext';
 import useLivePoll from '../../hooks/useLivePoll';
 import FileOpenViewer, { openBlobInNewTab, downloadHref } from '../../components/FileOpenViewer';
+import CreatorBadge, { confirmDeleteWithCreator } from '../../components/CreatorBadge';
 
 export default function Documents() {
   const { user } = useContext(AuthContext);
