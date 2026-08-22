@@ -50,21 +50,28 @@ if (!fs.existsSync(uploadsDir)) {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Persistent media from MongoDB GridFS (and fallback to local disk for old files)
-const { isObjectIdString, openDownloadById } = require('./utils/mediaStore');
+const { isObjectIdString, openDownloadById, peekFileBytes } = require('./utils/mediaStore');
+const { resolveStoredMime, displayFilename } = require('./utils/fileMime');
 app.get('/uploads/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const forceDownload = String(req.query.download || '') === '1';
     if (isObjectIdString(id)) {
+      const peeked = await peekFileBytes(id);
+      if (!peeked.file) {
+        return res.status(404).json({ message: 'File not found' });
+      }
       const found = await openDownloadById(id);
       if (!found) {
         return res.status(404).json({ message: 'File not found' });
       }
       const { file, stream } = found;
-      if (file.contentType) res.setHeader('Content-Type', file.contentType);
+      const mime = resolveStoredMime(file, peeked.bytes);
+      const name = displayFilename(file);
+      const disposition = forceDownload ? 'attachment' : 'inline';
+      res.setHeader('Content-Type', mime || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(name)}"`);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      if (file.filename) {
-        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
-      }
       stream.on('error', () => {
         if (!res.headersSent) res.status(404).end();
       });

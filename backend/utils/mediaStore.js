@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { GridFSBucket } = require('mongodb');
+const { resolveUploadMime } = require('./fileMime');
 
 let bucket = null;
 
@@ -19,11 +20,13 @@ async function saveUploadFile(file) {
   const filename = `${Date.now()}-${(file.originalname || 'file').replace(/[^\w.\-]+/g, '_')}`;
 
   return new Promise((resolve, reject) => {
+    const contentType = resolveUploadMime(file);
     const uploadStream = b.openUploadStream(filename, {
-      contentType: file.mimetype || 'application/octet-stream',
+      contentType,
       metadata: {
         originalName: file.originalname || '',
         size: file.size || 0,
+        mimetype: contentType,
       },
     });
 
@@ -35,7 +38,7 @@ async function saveUploadFile(file) {
         filename,
         // Public URL path — served by GET /uploads/:id
         fileUrl: `/uploads/${id}`,
-        mimetype: file.mimetype,
+        mimetype: contentType,
         size: file.size,
       });
     });
@@ -67,10 +70,28 @@ async function openDownloadById(id) {
   };
 }
 
+async function peekFileBytes(id, max = 32) {
+  const b = getBucket();
+  const _id = new mongoose.Types.ObjectId(id);
+  const files = await b.find({ _id }).toArray();
+  if (!files.length) return { file: null, bytes: Buffer.alloc(0) };
+  const file = files[0];
+  const end = Math.min(max - 1, Math.max(0, (file.length || max) - 1));
+  const stream = b.openDownloadStream(_id, { start: 0, end });
+  const chunks = [];
+  await new Promise((resolve, reject) => {
+    stream.on('data', (c) => chunks.push(c));
+    stream.on('end', resolve);
+    stream.on('error', reject);
+  });
+  return { file, bytes: Buffer.concat(chunks) };
+}
+
 module.exports = {
   getBucket,
   saveUploadFile,
   saveMany,
   isObjectIdString,
   openDownloadById,
+  peekFileBytes,
 };

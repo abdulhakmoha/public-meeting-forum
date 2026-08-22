@@ -20,7 +20,7 @@ export default function Projects() {
   const [commentText, setCommentText] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [mainImgUploading, setMainImgUploading] = useState(false);
-  const [fileViewer, setFileViewer] = useState({ open: false, url: '', title: '' });
+  const [fileViewer, setFileViewer] = useState({ open: false, url: '', title: '', mime: '', name: '' });
 
   const [newProject, setNewProject] = useState({
     title: '', description: '', budget: '', location: '', imageUrl: '', imageMime: '', imageName: ''
@@ -28,7 +28,7 @@ export default function Projects() {
 
   const canManage = user?.role === 'admin' || user?.role === 'moderator';
 
-  const openProjectFile = (e, url, title = 'Document') => {
+  const openProjectFile = (e, url, title = 'Document', mime = '', name = '') => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -39,8 +39,28 @@ export default function Projects() {
       alert('File URL is missing');
       return;
     }
-    // Always open in-app viewer so the user gets immediate feedback
-    setFileViewer({ open: true, url: full, title: title || 'Document' });
+    setFileViewer({
+      open: true,
+      url: full,
+      title: title || name || 'Document',
+      mime: mime || '',
+      name: name || title || '',
+    });
+  };
+
+  const openFileInBrowser = (url, mime = '', name = '') => {
+    if (!url) return;
+    const kind = fileKind(url, mime, name);
+    let target = url;
+    if (kind === 'doc') {
+      target = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    }
+    window.open(target, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadFileUrl = (url) => {
+    const join = url.includes('?') ? '&' : '?';
+    return `${url}${join}download=1`;
   };
 
   const ProjectFilePreview = ({ url, mime = '', name = '', height = 'h-40', rounded = 'rounded-t-3xl', clickable = false, title = 'Document' }) => {
@@ -65,7 +85,7 @@ export default function Projects() {
           />
           <button
             type="button"
-            onClick={(e) => openProjectFile(e, url, name || title)}
+            onClick={(e) => openProjectFile(e, url, name || title, mime, name)}
             className={`w-full ${height} bg-gradient-to-br from-red-500/10 to-orange-500/10 items-center justify-center hidden flex-col gap-2 ${canOpen ? 'cursor-pointer' : ''}`}
           >
             <FileText size={36} className="text-red-400" />
@@ -96,7 +116,7 @@ export default function Projects() {
     return (
       <button
         type="button"
-        onClick={(e) => openProjectFile(e, url, name || title)}
+        onClick={(e) => openProjectFile(e, url, name || title, mime, name)}
         className={`w-full ${height} flex flex-col items-center justify-center gap-2 ${rounded} ${colors} cursor-pointer transition-colors border-0`}
         title="Open file"
       >
@@ -497,39 +517,29 @@ export default function Projects() {
                       {selectedProject.progressImages && selectedProject.progressImages.filter(p => p.status === 'In Progress' || !p.status).length > 0 ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {selectedProject.progressImages.filter(p => p.status === 'In Progress' || !p.status).map((photo, i) => {
-                            const isPdf = photo.url?.toLowerCase().endsWith('.pdf');
                             const fullUrl = mediaUrl(photo.url);
                             return (
-                              <a key={i}
-                                href={isPdf ? '#' : fullUrl}
-                                target={isPdf ? undefined : '_blank'}
-                                rel={isPdf ? undefined : 'noreferrer'}
-                                onClick={isPdf ? (e) => { e.preventDefault(); setFileViewer({ open: true, url: fullUrl, title: `In Progress - ${i + 1}` }); } : undefined}
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={(e) => openProjectFile(e, photo.url, `In Progress - ${i + 1}`)}
+                                className="p-0 border-0 bg-transparent w-full"
                               >
-                                {isPdf ? (
-                                  <div className="w-full h-32 rounded-xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 flex flex-col items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/10 transition-all cursor-pointer">
-                                    <FileText size={28} className="text-amber-500" />
-                                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Click to read</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <img
-                                      src={fullUrl}
-                                      alt={`Progress ${i + 1}`}
-                                      className="w-full h-32 object-cover rounded-xl border-2 border-amber-200 dark:border-amber-800 hover:scale-105 transition-transform"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        const fallback = e.currentTarget.nextElementSibling;
-                                        if (fallback) fallback.classList.remove('hidden');
-                                      }}
-                                    />
-                                    <div className="hidden w-full h-32 rounded-xl border-2 border-amber-200 bg-amber-50 flex flex-col items-center justify-center gap-1">
-                                      <Image size={22} className="text-amber-400" />
-                                      <span className="text-[10px] text-amber-500 font-medium">Image unavailable</span>
-                                    </div>
-                                  </>
-                                )}
-                              </a>
+                                <img
+                                  src={fullUrl}
+                                  alt={`Progress ${i + 1}`}
+                                  className="w-full h-32 object-cover rounded-xl border-2 border-amber-200 dark:border-amber-800 hover:scale-105 transition-transform"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.nextElementSibling;
+                                    if (fallback) fallback.classList.remove('hidden');
+                                  }}
+                                />
+                                <div className="hidden w-full h-32 rounded-xl border-2 border-amber-200 bg-amber-50 flex flex-col items-center justify-center gap-1">
+                                  <FileText size={22} className="text-amber-400" />
+                                  <span className="text-[10px] text-amber-500 font-medium">Open file</span>
+                                </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -546,39 +556,29 @@ export default function Projects() {
                       {selectedProject.progressImages && selectedProject.progressImages.filter(p => p.status === 'Completed').length > 0 ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {selectedProject.progressImages.filter(p => p.status === 'Completed').map((photo, i) => {
-                            const isPdf = photo.url?.toLowerCase().endsWith('.pdf');
                             const fullUrl = mediaUrl(photo.url);
                             return (
-                              <a key={i}
-                                href={isPdf ? '#' : fullUrl}
-                                target={isPdf ? undefined : '_blank'}
-                                rel={isPdf ? undefined : 'noreferrer'}
-                                onClick={isPdf ? (e) => { e.preventDefault(); setFileViewer({ open: true, url: fullUrl, title: `Completed - ${i + 1}` }); } : undefined}
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={(e) => openProjectFile(e, photo.url, `Completed - ${i + 1}`)}
+                                className="p-0 border-0 bg-transparent w-full"
                               >
-                                {isPdf ? (
-                                  <div className="w-full h-32 rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 flex flex-col items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer">
-                                    <FileText size={28} className="text-emerald-500" />
-                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Click to read</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <img
-                                      src={fullUrl}
-                                      alt={`Completed ${i + 1}`}
-                                      className="w-full h-32 object-cover rounded-xl border-2 border-emerald-200 dark:border-emerald-800 hover:scale-105 transition-transform"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        const fallback = e.currentTarget.nextElementSibling;
-                                        if (fallback) fallback.classList.remove('hidden');
-                                      }}
-                                    />
-                                    <div className="hidden w-full h-32 rounded-xl border-2 border-emerald-200 bg-emerald-50 flex flex-col items-center justify-center gap-1">
-                                      <Image size={22} className="text-emerald-400" />
-                                      <span className="text-[10px] text-emerald-500 font-medium">Image unavailable</span>
-                                    </div>
-                                  </>
-                                )}
-                              </a>
+                                <img
+                                  src={fullUrl}
+                                  alt={`Completed ${i + 1}`}
+                                  className="w-full h-32 object-cover rounded-xl border-2 border-emerald-200 dark:border-emerald-800 hover:scale-105 transition-transform"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.nextElementSibling;
+                                    if (fallback) fallback.classList.remove('hidden');
+                                  }}
+                                />
+                                <div className="hidden w-full h-32 rounded-xl border-2 border-emerald-200 bg-emerald-50 flex flex-col items-center justify-center gap-1">
+                                  <FileText size={22} className="text-emerald-400" />
+                                  <span className="text-[10px] text-emerald-500 font-medium">Open file</span>
+                                </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -772,7 +772,7 @@ export default function Projects() {
         {fileViewer.open && (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
-            onClick={() => setFileViewer({ open: false, url: '', title: '' })}
+            onClick={() => setFileViewer({ open: false, url: '', title: '', mime: '', name: '' })}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -788,39 +788,44 @@ export default function Projects() {
                   <FileText size={16} className="text-red-500 shrink-0" /> {fileViewer.title}
                 </h3>
                 <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={fileViewer.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openFileInBrowser(fileViewer.url, fileViewer.mime, fileViewer.name)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
                   >
-                    Open in new tab
-                  </a>
+                    Open
+                  </button>
                   <a
-                    href={fileViewer.url}
-                    download
+                    href={downloadFileUrl(fileViewer.url)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
                   >
                     Download
                   </a>
                   <button
                     type="button"
-                    onClick={() => setFileViewer({ open: false, url: '', title: '' })}
+                    onClick={() => setFileViewer({ open: false, url: '', title: '', mime: '', name: '' })}
                     className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
                     <X size={20} />
                   </button>
                 </div>
               </div>
-              <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative">
-                <iframe
-                  src={fileViewer.url}
-                  className="w-full h-full border-0"
-                  title="File Viewer"
-                />
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-slate-500 bg-white/90 dark:bg-slate-900/90 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-                  Haddii preview uusan muuqan, isticmaal <b>Open in new tab</b>
-                </div>
+              <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative min-h-0">
+                {fileKind(fileViewer.url, fileViewer.mime, fileViewer.name) === 'image' ? (
+                  <img src={fileViewer.url} alt="" className="w-full h-full object-contain bg-slate-100 dark:bg-slate-950" />
+                ) : fileKind(fileViewer.url, fileViewer.mime, fileViewer.name) === 'doc' ? (
+                  <iframe
+                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileViewer.url)}`}
+                    className="w-full h-full border-0"
+                    title="Office preview"
+                  />
+                ) : (
+                  <iframe
+                    src={fileViewer.url}
+                    className="w-full h-full border-0"
+                    title="File preview"
+                  />
+                )}
               </div>
             </motion.div>
           </div>

@@ -11,17 +11,20 @@ export function fileKind(url, mime = '', name = '') {
     return 'image';
   }
   if (
-    /\.(docx?|pptx?|xlsx?|txt|csv)(\?|#|$)/i.test(hay) ||
+    m.startsWith('text/') ||
+    /\.(txt|csv)(\?|#|$)/i.test(hay)
+  ) {
+    return 'text';
+  }
+  if (
+    /\.(docx?|pptx?|xlsx?)(\?|#|$)/i.test(hay) ||
     m.includes('officedocument') ||
     m.includes('msword') ||
     m.includes('ms-excel') ||
-    m.includes('ms-powerpoint') ||
-    m.includes('text/')
+    m.includes('ms-powerpoint')
   ) {
     return 'doc';
   }
-  // Uploaded asset that is not a clear image → treat as document (avoid broken <img>)
-  if ((url || '').includes('/uploads/')) return 'doc';
   return 'unknown';
 }
 
