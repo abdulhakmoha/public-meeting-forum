@@ -8,6 +8,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './Calendar.css';
 import { isMeetingEnded as meetingHasEnded } from '../../utils/meetingTime';
+import useLivePoll from '../../hooks/useLivePoll';
 
 export default function Meetings() {
   const { user } = useContext(AuthContext);
